@@ -3,7 +3,8 @@ import Orb from "./components/Orb"
 import { useSpeechRecognition } from "./hooks/useSpeechRecognition"
 import { useTextToSpeech } from "./hooks/useTextToSpeech"
 import { useAudioLevel } from "./hooks/useAudioLevel"
-import { generateNextQuestion, evaluateAnswer } from "./lib/gemini"
+import { evaluateSession } from "./lib/gemini"
+import { pickQuestions } from "./lib/questions"
 import "./App.css"
 
 const QUESTION_COUNT = 6
@@ -21,6 +22,26 @@ const ROLE_OPTIONS = [
   "UI/UX Designer",
 ]
 
+// Turns a caught error into a user-facing message. Understands the
+// GeminiApiError shape (isQuotaError / retryAfterSeconds) thrown by lib/gemini.js
+// and falls back to a generic message for anything else (network errors, etc).
+function messageForError(err) {
+  if (err?.isQuotaError) {
+    // Google's `retryDelay` is a generic short backoff suggestion (often
+    // ~30-60s) — it applies to per-minute rate limiting, NOT the daily cap.
+    // For the daily free-tier limit it keeps returning a short delay even
+    // though the real reset is hours away, so showing it as a countdown is
+    // actively misleading. Only show it when we know it's NOT a daily-cap error.
+    if (err.isDailyQuota) {
+      return "You've hit today's free-tier request limit. This resets at midnight Pacific Time — check your real usage at ai.dev/rate-limit."
+    }
+    return err.retryAfterSeconds
+      ? `Too many requests right now — try again in about ${err.retryAfterSeconds}s.`
+      : "You've hit the AI request limit for now. Please wait a bit and try again."
+  }
+  return "Couldn't reach the interviewer AI. Check your connection and try again."
+}
+
 export default function App() {
   const [screen, setScreen] = useState("setup") // "setup" | "interview" | "summary"
   const [role, setRole] = useState(ROLE_OPTIONS[0])
@@ -28,99 +49,133 @@ export default function App() {
 
   const [orbState, setOrbState] = useState("idle")
   const [currentQuestion, setCurrentQuestion] = useState("")
-  const [session, setSession] = useState([]) // [{ question, answer, metrics, evaluation }]
+  const [answeredCount, setAnsweredCount] = useState(0) // drives the "Question X of N" label
+  const [session, setSession] = useState([]) // filled in only once, after the batched evaluation
+  const [overallSummary, setOverallSummary] = useState("")
   const [error, setError] = useState(null)
+  // True once every question has been answered and we're waiting on / retrying
+  // the single batched scoring call, rather than mid-interview.
+  const [awaitingFinalScore, setAwaitingFinalScore] = useState(false)
 
   const promptShownAtRef = useRef(null)
-  // Mirrors `session` synchronously so async callbacks never work off a stale
-  // closure and never need to put side effects inside a state updater.
-  const sessionRef = useRef([])
+  // The full question list, picked once (no API call) when the interview starts.
+  const questionsRef = useRef([])
+  const currentQuestionRef = useRef("")
+  // Every {question, answer, metrics} collected so far this interview — no
+  // scoring happens until this is complete, so this ref IS the source of
+  // truth during the interview (session state only fills in at the end).
+  const qasRef = useRef([])
 
   const { isListening, transcript, startListening, finishAnswer, stopListening } = useSpeechRecognition()
   const { speak } = useTextToSpeech()
   const { level: micLevel, startTracking, stopTracking } = useAudioLevel()
 
-  const askQuestion = useCallback(async (history) => {
-    setOrbState("thinking")
-    setError(null)
-    try {
-      const question = await generateNextQuestion({ role, seniority, history })
-      setCurrentQuestion(question)
-
-      setOrbState("speaking")
-      promptShownAtRef.current = Date.now()
-
-      speak(question, () => {
-        setOrbState("listening")
-        startTracking()
-        startListening(handleAnswer, promptShownAtRef.current)
-      })
-    } catch (err) {
-      console.error("Failed to generate next question:", err)
-      setError("Couldn't reach the interviewer AI. Check your connection and try again.")
-      setOrbState("error")
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [role, seniority, speak, startTracking, startListening])
-
-  const handleAnswer = useCallback(async (answerText, metrics) => {
-    stopTracking()
-    setOrbState("thinking")
-    setError(null)
-
-    try {
-      const evaluation = await evaluateAnswer({
-        question: currentQuestion,
-        answer: answerText,
-        metrics,
-      })
-
-      const entry = { question: currentQuestion, answer: answerText, metrics, evaluation }
-      const updated = [...sessionRef.current, entry]
-      sessionRef.current = updated
-      setSession(updated)
-
-      if (updated.length >= QUESTION_COUNT) {
-        setScreen("summary")
-        setOrbState("idle")
-      } else {
-        askQuestion(updated.map(e => ({ question: e.question, answer: e.answer })))
-      }
-    } catch (err) {
-      console.error("Failed to evaluate answer:", err)
-      setError("Something went wrong grading that answer. You can retry it below.")
-      setOrbState("error")
-    }
-  }, [currentQuestion, stopTracking, askQuestion])
-
-  const retryCurrentQuestion = () => {
-    setError(null)
+  // Speaks the given question aloud, then starts listening for the answer.
+  // Shared by every question and by question retries.
+  const presentQuestion = useCallback((question) => {
+    setCurrentQuestion(question)
+    currentQuestionRef.current = question
     setOrbState("speaking")
     promptShownAtRef.current = Date.now()
-    speak(currentQuestion, () => {
+
+    speak(question, () => {
       setOrbState("listening")
       startTracking()
       startListening(handleAnswer, promptShownAtRef.current)
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [speak, startTracking, startListening])
+
+  // Sends everything collected so far to the AI in ONE request and builds
+  // the final session + summary from the result. Also used to retry just
+  // this last step if it fails, without re-asking any questions.
+  const runFinalScoring = useCallback(async () => {
+    setAwaitingFinalScore(true)
+    setOrbState("thinking")
+    setError(null)
+
+    try {
+      const { evaluations, overallSummary } = await evaluateSession({
+        role, seniority, qas: qasRef.current,
+      })
+
+      const finalSession = qasRef.current.map((qa, i) => ({
+        question: qa.question,
+        answer: qa.answer,
+        metrics: qa.metrics,
+        evaluation: evaluations[i],
+      }))
+
+      setSession(finalSession)
+      setOverallSummary(overallSummary || "")
+      setScreen("summary")
+      setOrbState("idle")
+      setAwaitingFinalScore(false)
+    } catch (err) {
+      console.error("Failed to score the session:", err)
+      setError(messageForError(err))
+      setOrbState("error")
+      // Stay on the interview screen with awaitingFinalScore=true so the
+      // retry button re-runs scoring instead of re-asking a question.
+    }
+  }, [role, seniority])
+
+  const handleAnswer = useCallback((answerText, metrics) => {
+    stopTracking()
+    setError(null)
+
+    const updated = [...qasRef.current, { question: currentQuestionRef.current, answer: answerText, metrics }]
+    qasRef.current = updated
+    setAnsweredCount(updated.length)
+
+    if (updated.length >= QUESTION_COUNT) {
+      // All questions answered — this is the one and only point that calls the AI.
+      runFinalScoring()
+    } else {
+      // Next question comes straight from the local list — no API call.
+      presentQuestion(questionsRef.current[updated.length])
+    }
+  }, [stopTracking, presentQuestion, runFinalScoring])
+
+  const retryCurrentQuestion = () => {
+    setError(null)
+    if (awaitingFinalScore) {
+      // We're past the last question — retry scoring, not the question.
+      runFinalScoring()
+    } else {
+      // Re-asks the same question without touching the API at all.
+      presentQuestion(currentQuestionRef.current)
+    }
   }
 
   const startInterview = () => {
-    sessionRef.current = []
+    qasRef.current = []
+    setAnsweredCount(0)
     setSession([])
+    setOverallSummary("")
     setError(null)
+    setAwaitingFinalScore(false)
     setScreen("interview")
-    askQuestion([])
+
+    // Pick the whole question list up front, locally — zero API calls here.
+    questionsRef.current = pickQuestions(role, QUESTION_COUNT)
+    presentQuestion(questionsRef.current[0])
   }
 
   const restart = () => {
     stopListening()
     stopTracking()
     setScreen("setup")
-    sessionRef.current = []
+    qasRef.current = []
+    setAnsweredCount(0)
+    questionsRef.current = []
     setSession([])
+    setOverallSummary("")
     setCurrentQuestion("")
+    currentQuestionRef.current = ""
     setOrbState("idle")
     setError(null)
+    setAwaitingFinalScore(false)
   }
 
   if (screen === "setup") {
@@ -130,8 +185,8 @@ export default function App() {
           <p className="eyebrow">AI Interview Coach</p>
           <h1>Practice out loud.<br />Get real feedback.</h1>
           <p className="hero-sub">
-            A live, voice-driven mock interview that adapts its follow-up questions
-            to what you actually say — then scores your content, clarity, and confidence.
+            A live, voice-driven mock interview. Answer out loud, and once you're
+            done the AI scores your content, clarity, and confidence based on what you actually said.
           </p>
         </header>
 
@@ -165,11 +220,15 @@ export default function App() {
     return (
       <div className="page">
         <div className="interview-shell">
-          <p className="progress-label">Question {Math.min(session.length + 1, QUESTION_COUNT)} of {QUESTION_COUNT}</p>
+          <p className="progress-label">
+            {awaitingFinalScore
+              ? "Scoring your interview…"
+              : `Question ${Math.min(answeredCount + 1, QUESTION_COUNT)} of ${QUESTION_COUNT}`}
+          </p>
 
           <Orb state={orbState === "error" ? "idle" : orbState} micLevel={micLevel} />
 
-          <p className="question-text">{currentQuestion}</p>
+          {!awaitingFinalScore && <p className="question-text">{currentQuestion}</p>}
 
           {isListening && (
             <div className="listening-panel">
@@ -184,7 +243,7 @@ export default function App() {
             <div className="error-panel">
               <p>{error}</p>
               <button className="secondary-btn" onClick={retryCurrentQuestion}>
-                Retry this question
+                {awaitingFinalScore ? "Retry scoring" : "Retry this question"}
               </button>
             </div>
           )}
@@ -202,6 +261,9 @@ export default function App() {
     <div className="page">
       <div className="summary-shell">
         <h1>Session summary</h1>
+
+        {overallSummary && <p className="hero-sub" style={{ margin: "0 0 1.75rem", textAlign: "left" }}>{overallSummary}</p>}
+
         <div className="score-row">
           <div className="score-card"><span>{avg("contentScore")}</span><label>Content</label></div>
           <div className="score-card"><span>{avg("clarityScore")}</span><label>Clarity</label></div>
