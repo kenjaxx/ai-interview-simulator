@@ -19,8 +19,9 @@ export function useSpeechRecognition() {
   const startTimeRef = useRef(null)
   const promptShownAtRef = useRef(null)
   const onFinalRef = useRef(null)
+  const sessionIdRef = useRef(0) // guards against stale/late events from old sessions
 
-  const SILENCE_MS = 1400 // pause length that signals "user is done talking"
+  const SILENCE_MS = 2200 // longer pause allowed before treating answer as finished
 
   const startListening = useCallback((onFinalTranscript, promptShownAt) => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
@@ -29,6 +30,15 @@ export function useSpeechRecognition() {
       return
     }
 
+    // Fully retire any previous session before starting a new one
+    if (recognitionRef.current) {
+      recognitionRef.current.onresult = null
+      recognitionRef.current.onend = null
+      recognitionRef.current.onerror = null
+      try { recognitionRef.current.abort() } catch {}
+    }
+
+    const thisSessionId = ++sessionIdRef.current
     onFinalRef.current = onFinalTranscript
     promptShownAtRef.current = promptShownAt || Date.now()
     startTimeRef.current = null
@@ -40,6 +50,7 @@ export function useSpeechRecognition() {
     recognition.lang = "en-US"
 
     recognition.onresult = (event) => {
+      if (sessionIdRef.current !== thisSessionId) return // stale session, ignore
       if (!startTimeRef.current) startTimeRef.current = Date.now()
 
       let fullText = ""
@@ -50,16 +61,18 @@ export function useSpeechRecognition() {
 
       clearTimeout(silenceTimerRef.current)
       silenceTimerRef.current = setTimeout(() => {
-        recognition.stop()
+        if (sessionIdRef.current === thisSessionId) recognition.stop()
       }, SILENCE_MS)
     }
 
     recognition.onerror = (event) => {
+      if (sessionIdRef.current !== thisSessionId) return
       console.error("Speech recognition error:", event.error)
       setIsListening(false)
     }
 
     recognition.onend = () => {
+      if (sessionIdRef.current !== thisSessionId) return // stale session, ignore completely
       setIsListening(false)
       clearTimeout(silenceTimerRef.current)
 
@@ -87,7 +100,8 @@ export function useSpeechRecognition() {
   }, [])
 
   const stopListening = useCallback(() => {
-    recognitionRef.current?.stop()
+    sessionIdRef.current++ // invalidate current session
+    recognitionRef.current?.abort()
   }, [])
 
   return { isListening, transcript, startListening, stopListening }

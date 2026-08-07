@@ -1,5 +1,5 @@
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY
-const MODEL = "gemini-2.5-flash"
+const MODEL = "gemini-3.6-flash"
 const BASE_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`
 
 async function callGemini(systemPrompt, userPrompt, expectJson = false) {
@@ -9,9 +9,12 @@ async function callGemini(systemPrompt, userPrompt, expectJson = false) {
     generationConfig: expectJson ? { responseMimeType: "application/json" } : {},
   }
 
-  const res = await fetch(`${BASE_URL}?key=${API_KEY}`, {
+  const res = await fetch(BASE_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": API_KEY,
+    },
     body: JSON.stringify(body),
   })
 
