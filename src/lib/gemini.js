@@ -52,8 +52,23 @@ export async function evaluateAnswer({ question, answer, metrics }) {
   "improvementTip": "<one concrete, actionable tip>"
 }`
 
-  const userPrompt = `Question: ${question}\n\nAnswer transcript: ${answer}\n\nSpeech metrics:\n- Filler words: ${metrics.fillerCount}\n- Words per minute: ${metrics.wpm}\n- Response delay: ${metrics.responseDelaySec}s`
+  // Long answers can push the model toward truncated/oddly-formatted output,
+  // so cap what we send and always sanitize before parsing.
+  const trimmedAnswer = answer.length > 6000 ? answer.slice(0, 6000) + " [...]" : answer
 
-  const jsonText = await callGemini(systemPrompt, userPrompt, true)
-  return JSON.parse(jsonText)
+  const userPrompt = `Question: ${question}\n\nAnswer transcript: ${trimmedAnswer}\n\nSpeech metrics:\n- Filler words: ${metrics.fillerCount}\n- Words per minute: ${metrics.wpm}\n- Response delay: ${metrics.responseDelaySec}s`
+
+  const rawText = await callGemini(systemPrompt, userPrompt, true)
+
+  // Strip markdown code fences if the model added them anyway, and grab the
+  // outermost {...} block in case there's stray preamble/trailing text.
+  const cleaned = rawText.replace(/```json|```/g, "").trim()
+  const match = cleaned.match(/\{[\s\S]*\}/)
+  const jsonText = match ? match[0] : cleaned
+
+  try {
+    return JSON.parse(jsonText)
+  } catch (err) {
+    throw new Error(`Failed to parse evaluation response: ${err.message}`)
+  }
 }

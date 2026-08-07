@@ -21,7 +21,9 @@ export function useSpeechRecognition() {
   const onFinalRef = useRef(null)
   const sessionIdRef = useRef(0) // guards against stale/late events from old sessions
 
-  const SILENCE_MS = 2200 // longer pause allowed before treating answer as finished
+  // This is now just a safety backstop, not the primary "I'm done" signal.
+  // The user finishes their answer explicitly via finishAnswer().
+  const SILENCE_BACKSTOP_MS = 30000
 
   const startListening = useCallback((onFinalTranscript, promptShownAt) => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
@@ -59,14 +61,20 @@ export function useSpeechRecognition() {
       }
       setTranscript(fullText.trim())
 
+      // Backstop only — resets on every new bit of speech, so a normal
+      // thinking pause never trips it. It only fires if the mic is left
+      // open with no input at all for a long stretch.
       clearTimeout(silenceTimerRef.current)
       silenceTimerRef.current = setTimeout(() => {
         if (sessionIdRef.current === thisSessionId) recognition.stop()
-      }, SILENCE_MS)
+      }, SILENCE_BACKSTOP_MS)
     }
 
     recognition.onerror = (event) => {
       if (sessionIdRef.current !== thisSessionId) return
+      // "no-speech" fires constantly on some browsers during normal pauses — ignore it,
+      // let the user's Finish button or the long backstop handle things instead.
+      if (event.error === "no-speech") return
       console.error("Speech recognition error:", event.error)
       setIsListening(false)
     }
@@ -99,10 +107,21 @@ export function useSpeechRecognition() {
     setIsListening(true)
   }, [])
 
+  // Graceful stop — triggers onend, which finalizes and submits the transcript.
+  // This is what the "I'm done" button calls.
+  const finishAnswer = useCallback(() => {
+    if (recognitionRef.current && isListening) {
+      clearTimeout(silenceTimerRef.current)
+      recognitionRef.current.stop()
+    }
+  }, [isListening])
+
+  // Hard cancel — discards everything, does NOT submit. Used on restart/unmount.
   const stopListening = useCallback(() => {
     sessionIdRef.current++ // invalidate current session
+    clearTimeout(silenceTimerRef.current)
     recognitionRef.current?.abort()
   }, [])
 
-  return { isListening, transcript, startListening, stopListening }
+  return { isListening, transcript, startListening, finishAnswer, stopListening }
 }
