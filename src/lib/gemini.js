@@ -154,13 +154,15 @@ function mockEvaluation(answer = "", metrics = {}) {
 // while costing exactly 1 API request per interview instead of 1-per-answer.
 //
 // qas: [{ question, answer, metrics: { fillerCount, wpm, responseDelaySec } }, ...]
-export async function evaluateSession({ role, seniority, qas }) {
-  if (MOCK_MODE) {
+export async function evaluateSession({ role, seniority, qas, mock = false }) {
+  const useMock = MOCK_MODE || mock
+
+  if (useMock) {
     await mockDelay()
     const evaluations = qas.map(qa => mockEvaluation(qa.answer, qa.metrics))
     return {
       evaluations,
-      overallSummary: "(Mock summary) Solid overall performance — focus on trimming filler words and keeping a steady pace.",
+      overallSummary: "Solid overall performance — focus on trimming filler words and keeping a steady pace. (Practice Mode: locally scored, not real AI feedback.)",
     }
   }
 

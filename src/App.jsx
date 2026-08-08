@@ -1,5 +1,9 @@
-import { useState, useCallback, useRef } from "react"
+import { useState, useCallback, useRef, useEffect } from "react"
 import Orb from "./components/Orb"
+import Header from "./components/Header"
+import Login from "./components/Login"
+import ModeToggle from "./components/ModeToggle"
+import { useAuth } from "./context/AuthContext"
 import { useSpeechRecognition } from "./hooks/useSpeechRecognition"
 import { useTextToSpeech } from "./hooks/useTextToSpeech"
 import { useAudioLevel } from "./hooks/useAudioLevel"
@@ -8,6 +12,7 @@ import { pickQuestions } from "./lib/questions"
 import "./App.css"
 
 const QUESTION_COUNT = 6
+const MODE_STORAGE_KEY = "interview-ai-mode"
 
 const ROLE_OPTIONS = [
   "Frontend Developer",
@@ -22,18 +27,10 @@ const ROLE_OPTIONS = [
   "UI/UX Designer",
 ]
 
-// Turns a caught error into a user-facing message. Understands the
-// GeminiApiError shape (isQuotaError / retryAfterSeconds) thrown by lib/gemini.js
-// and falls back to a generic message for anything else (network errors, etc).
 function messageForError(err) {
   if (err?.isQuotaError) {
-    // Google's `retryDelay` is a generic short backoff suggestion (often
-    // ~30-60s) — it applies to per-minute rate limiting, NOT the daily cap.
-    // For the daily free-tier limit it keeps returning a short delay even
-    // though the real reset is hours away, so showing it as a countdown is
-    // actively misleading. Only show it when we know it's NOT a daily-cap error.
     if (err.isDailyQuota) {
-      return "You've hit today's free-tier request limit. This resets at midnight Pacific Time — check your real usage at ai.dev/rate-limit."
+      return "You've hit today's free-tier request limit. This resets at midnight Pacific Time — check your real usage at ai.dev/rate-limit, or switch to Practice Mode for unlimited local scoring."
     }
     return err.retryAfterSeconds
       ? `Too many requests right now — try again in about ${err.retryAfterSeconds}s.`
@@ -43,35 +40,41 @@ function messageForError(err) {
 }
 
 export default function App() {
+  const { user, authLoading } = useAuth()
+
   const [screen, setScreen] = useState("setup") // "setup" | "interview" | "summary"
   const [role, setRole] = useState(ROLE_OPTIONS[0])
   const [seniority, setSeniority] = useState("Mid-level")
+  const [aiMode, setAiMode] = useState(() => {
+    if (typeof window === "undefined") return "practice"
+    return window.localStorage.getItem(MODE_STORAGE_KEY) === "full" ? "full" : "practice"
+  })
 
   const [orbState, setOrbState] = useState("idle")
   const [currentQuestion, setCurrentQuestion] = useState("")
-  const [answeredCount, setAnsweredCount] = useState(0) // drives the "Question X of N" label
-  const [session, setSession] = useState([]) // filled in only once, after the batched evaluation
+  const [answeredCount, setAnsweredCount] = useState(0)
+  const [session, setSession] = useState([])
   const [overallSummary, setOverallSummary] = useState("")
   const [error, setError] = useState(null)
-  // True once every question has been answered and we're waiting on / retrying
-  // the single batched scoring call, rather than mid-interview.
   const [awaitingFinalScore, setAwaitingFinalScore] = useState(false)
+  // Locked in when the interview starts, so toggling the switch mid-interview
+  // never changes how the session already in progress gets scored.
+  const [sessionMode, setSessionMode] = useState("practice")
 
   const promptShownAtRef = useRef(null)
-  // The full question list, picked once (no API call) when the interview starts.
   const questionsRef = useRef([])
   const currentQuestionRef = useRef("")
-  // Every {question, answer, metrics} collected so far this interview — no
-  // scoring happens until this is complete, so this ref IS the source of
-  // truth during the interview (session state only fills in at the end).
   const qasRef = useRef([])
+  const sessionModeRef = useRef("practice")
 
   const { isListening, transcript, startListening, finishAnswer, stopListening } = useSpeechRecognition()
   const { speak } = useTextToSpeech()
   const { level: micLevel, startTracking, stopTracking } = useAudioLevel()
 
-  // Speaks the given question aloud, then starts listening for the answer.
-  // Shared by every question and by question retries.
+  useEffect(() => {
+    window.localStorage.setItem(MODE_STORAGE_KEY, aiMode)
+  }, [aiMode])
+
   const presentQuestion = useCallback((question) => {
     setCurrentQuestion(question)
     currentQuestionRef.current = question
@@ -86,9 +89,6 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [speak, startTracking, startListening])
 
-  // Sends everything collected so far to the AI in ONE request and builds
-  // the final session + summary from the result. Also used to retry just
-  // this last step if it fails, without re-asking any questions.
   const runFinalScoring = useCallback(async () => {
     setAwaitingFinalScore(true)
     setOrbState("thinking")
@@ -96,7 +96,7 @@ export default function App() {
 
     try {
       const { evaluations, overallSummary } = await evaluateSession({
-        role, seniority, qas: qasRef.current,
+        role, seniority, qas: qasRef.current, mock: sessionModeRef.current === "practice",
       })
 
       const finalSession = qasRef.current.map((qa, i) => ({
@@ -115,8 +115,6 @@ export default function App() {
       console.error("Failed to score the session:", err)
       setError(messageForError(err))
       setOrbState("error")
-      // Stay on the interview screen with awaitingFinalScore=true so the
-      // retry button re-runs scoring instead of re-asking a question.
     }
   }, [role, seniority])
 
@@ -129,10 +127,8 @@ export default function App() {
     setAnsweredCount(updated.length)
 
     if (updated.length >= QUESTION_COUNT) {
-      // All questions answered — this is the one and only point that calls the AI.
       runFinalScoring()
     } else {
-      // Next question comes straight from the local list — no API call.
       presentQuestion(questionsRef.current[updated.length])
     }
   }, [stopTracking, presentQuestion, runFinalScoring])
@@ -140,16 +136,16 @@ export default function App() {
   const retryCurrentQuestion = () => {
     setError(null)
     if (awaitingFinalScore) {
-      // We're past the last question — retry scoring, not the question.
       runFinalScoring()
     } else {
-      // Re-asks the same question without touching the API at all.
       presentQuestion(currentQuestionRef.current)
     }
   }
 
   const startInterview = () => {
     qasRef.current = []
+    sessionModeRef.current = aiMode
+    setSessionMode(aiMode)
     setAnsweredCount(0)
     setSession([])
     setOverallSummary("")
@@ -157,7 +153,6 @@ export default function App() {
     setAwaitingFinalScore(false)
     setScreen("interview")
 
-    // Pick the whole question list up front, locally — zero API calls here.
     questionsRef.current = pickQuestions(role, QUESTION_COUNT)
     presentQuestion(questionsRef.current[0])
   }
@@ -178,9 +173,22 @@ export default function App() {
     setAwaitingFinalScore(false)
   }
 
+  if (authLoading) {
+    return (
+      <div className="page-loading">
+        <div className="page-loading-spinner" />
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <Login />
+  }
+
   if (screen === "setup") {
     return (
       <div className="page">
+        <Header />
         <header className="hero">
           <p className="eyebrow">AI Interview Coach</p>
           <h1>Practice out loud.<br />Get real feedback.</h1>
@@ -209,6 +217,8 @@ export default function App() {
             </select>
           </div>
 
+          <ModeToggle mode={aiMode} onChange={setAiMode} />
+
           <button className="primary-btn" onClick={startInterview}>Start interview</button>
           <p className="setup-note">You'll need microphone access — {QUESTION_COUNT} questions, spoken answers.</p>
         </div>
@@ -219,6 +229,7 @@ export default function App() {
   if (screen === "interview") {
     return (
       <div className="page">
+        <Header />
         <div className="interview-shell">
           <p className="progress-label">
             {awaitingFinalScore
@@ -259,8 +270,14 @@ export default function App() {
 
   return (
     <div className="page">
+      <Header />
       <div className="summary-shell">
-        <h1>Session summary</h1>
+        <div className="summary-heading-row">
+          <h1>Session summary</h1>
+          <span className={`mode-badge ${sessionMode === "full" ? "mode-badge--full" : ""}`}>
+            {sessionMode === "full" ? "Full AI Mode" : "Practice Mode"}
+          </span>
+        </div>
 
         {overallSummary && <p className="hero-sub" style={{ margin: "0 0 1.75rem", textAlign: "left" }}>{overallSummary}</p>}
 
