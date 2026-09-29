@@ -93,18 +93,21 @@ function clamp(n, min, max) {
 }
 
 // Heuristic, metrics-based evaluation for a single Q&A, with no real AI judgment.
-function mockEvaluation(answer = "", metrics = {}) {
+function mockEvaluation(answer = "", metrics = {}, inputMethod = "voice") {
+  const typed = inputMethod === "text"
   const { fillerCount = 0, wpm = 0, responseDelaySec = 0 } = metrics
   const wordCount = answer.trim() ? answer.trim().split(/\s+/).length : 0
 
   let confidenceScore = 90
   confidenceScore -= fillerCount * 4
-  confidenceScore -= Math.max(0, responseDelaySec - 3) * 2
-  if (wpm > 0 && (wpm < 90 || wpm > 190)) confidenceScore -= 10
+  if (!typed) {
+    confidenceScore -= Math.max(0, responseDelaySec - 3) * 2
+    if (wpm > 0 && (wpm < 90 || wpm > 190)) confidenceScore -= 10
+  }
   confidenceScore = clamp(Math.round(confidenceScore), 30, 98)
 
   let clarityScore = 88
-  if (wpm > 0) {
+  if (!typed && wpm > 0) {
     const distanceFromIdeal = Math.abs(wpm - 140)
     clarityScore -= Math.round(distanceFromIdeal / 5)
   }
@@ -122,16 +125,22 @@ function mockEvaluation(answer = "", metrics = {}) {
 
   const feedbackByArea = {
     content: `(Mock feedback) You gave a ${wordCount}-word answer — a bit more detail or a concrete example would strengthen it.`,
-    clarity: `(Mock feedback) Your pace was around ${wpm || "an unmeasured"} wpm — aim for a steady, conversational rhythm to sound clearer.`,
+    clarity: typed
+      ? "(Mock feedback) Shorter, more direct sentences would make your typed answer easier to follow."
+      : `(Mock feedback) Your pace was around ${wpm || "an unmeasured"} wpm — aim for a steady, conversational rhythm to sound clearer.`,
     confidence:
       fillerCount > 0
         ? `(Mock feedback) You used ${fillerCount} filler word${fillerCount === 1 ? "" : "s"} (um/uh/like) — cutting those down will sound more confident.`
-        : `(Mock feedback) Watch your response delay (${responseDelaySec}s before you started) — jumping in sooner reads as more confident.`,
+        : typed
+          ? "(Mock feedback) Your typed answer reads steadily — avoid hedging phrases to sound even more decisive."
+          : `(Mock feedback) Watch your response delay (${responseDelaySec}s before you started) — jumping in sooner reads as more confident.`,
   }
 
   const tipByArea = {
     content: "(Mock tip) Structure your answer with a brief example: situation, action, result.",
-    clarity: "(Mock tip) Practice saying your answer at a steady pace — not rushed, not dragging.",
+    clarity: typed
+      ? "(Mock tip) Lead with the outcome, then give the context."
+      : "(Mock tip) Practice saying your answer at a steady pace — not rushed, not dragging.",
     confidence: "(Mock tip) Pause silently instead of using filler words when you need a moment to think.",
   }
 
@@ -155,7 +164,7 @@ export async function evaluateSession({ role, seniority, qas, mock = false }) {
   if (MOCK_MODE || mock) {
     await mockDelay()
     return {
-      evaluations: qas.map((qa) => mockEvaluation(qa.answer, qa.metrics)),
+          qas: qas.map(({ question, answer, metrics, inputMethod }) => ({ question, answer, metrics, inputMethod })),
       overallSummary:
         "Solid overall performance — focus on trimming filler words and keeping a steady pace. (Practice Mode: locally scored, not real AI feedback.)",
     }

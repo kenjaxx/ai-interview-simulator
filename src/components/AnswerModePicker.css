@@ -1,0 +1,33 @@
+.field-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #b0b0ba;
+}
+
+.answer-mode { display: flex; gap: 8px; }
+.answer-mode-btn {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #1a1b22;
+  color: #cfcfd6;
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.answer-mode-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.answer-mode-btn--on {
+  border-color: #c084fc;
+  color: #f0f0f2;
+  background: rgba(170, 59, 255, 0.14);
+}
+
+.mode-notice {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: #9a9aa5;
+}
+.mode-notice--warn { color: #f5c98a; }
+.mode-notice--ok { color: #6fdc9f; }

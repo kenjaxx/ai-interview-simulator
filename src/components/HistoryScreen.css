@@ -1,0 +1,80 @@
+.history-shell {
+  width: 100%;
+  max-width: 640px;
+  padding: 3rem 1.5rem 4rem;
+  text-align: left;
+  animation: fade-up 0.4s ease both;
+}
+
+.history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 1.5rem;
+}
+.history-head h1 { font-size: 1.8rem; font-weight: 650; color: #f5f5f7; margin: 0; }
+
+.history-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 3rem 0;
+  color: #9a9aa5;
+  text-align: center;
+}
+
+.history-empty { color: #9a9aa5; font-size: 14px; margin: 0 0 1.5rem; }
+.history-error { color: #ffb3b3; font-size: 13.5px; margin: 0 0 1rem; }
+
+.history-filters { display: flex; gap: 8px; margin: 0 0 1.25rem; }
+.filter-btn {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: transparent;
+  color: #cfcfd6;
+  font-size: 13px;
+  cursor: pointer;
+}
+.filter-btn--on { border-color: #c084fc; color: #c084fc; background: rgba(170, 59, 255, 0.1); }
+
+.chart-card {
+  margin: 0 0 1.5rem;
+  padding: 1rem;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.chart-card svg { width: 100%; height: auto; display: block; }
+.chart-legend { list-style: none; display: flex; gap: 16px; margin: 8px 0 0; padding: 0; font-size: 12.5px; color: #b8b8c2; }
+.legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+
+.history-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.history-item {
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.history-item-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: none;
+  border: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.history-item-main { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.history-item-main strong { color: #f0f0f2; font-size: 14.5px; }
+.history-item-main span { color: #9a9aa5; font-size: 12.5px; }
+.history-item-score { font-size: 1.4rem; font-weight: 700; color: #c084fc; min-width: 2ch; text-align: right; }
+
+.history-item-body { padding: 0 16px 16px; }
+.history-summary { color: #b8b8c2; font-size: 14px; line-height: 1.5; margin: 0 0 1rem; }
+.history-delete { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 8px; font-size: 13.5px; color: #cfcfd6; }

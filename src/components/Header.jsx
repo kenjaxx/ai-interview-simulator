@@ -1,7 +1,8 @@
 import { useAuth } from "../context/AuthContext"
 import "./Header.css"
 
-export default function Header() {
+// onHistory is optional: the History link only shows on screens where leaving is safe.
+export default function Header({ onHistory }) {
   const { user, signOutUser } = useAuth()
   if (!user) return null
 
@@ -12,6 +13,9 @@ export default function Header() {
         AI Interview Coach
       </div>
       <div className="app-header-user">
+        {onHistory && (
+          <button className="app-header-signout" onClick={onHistory}>History</button>
+        )}
         {user.photoURL ? (
           <img
             className="app-header-avatar"

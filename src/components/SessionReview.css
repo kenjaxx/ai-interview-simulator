@@ -1,0 +1,39 @@
+.review-index {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #9a9aa5;
+}
+
+.review-empty {
+  color: #9a9aa5;
+  font-size: 14px;
+  text-align: left;
+}
+
+.chip-row {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 0;
+}
+
+.chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  color: #b8b8c2;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.chip strong { color: #f0f0f2; font-weight: 650; }
+
+.chip--score {
+  color: #d8c4f5;
+  background: rgba(170, 59, 255, 0.1);
+  border-color: rgba(170, 59, 255, 0.28);
+}

@@ -322,3 +322,106 @@
 .review-answer { color: #8a8a94; font-size: 14px; margin: 0 0 10px; line-height: 1.5; }
 .review-feedback { font-size: 14px; margin: 0 0 6px; color: #d0d0d5; line-height: 1.5; }
 .review-tip { font-size: 13px; color: #c084fc; margin: 0; font-weight: 500; }
+
+
+/* ---------- Accessibility helper ---------- */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- Setup extras ---------- */
+
+.setup-notice {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: #f5c98a;
+  background: rgba(245, 201, 138, 0.08);
+  border: 1px solid rgba(245, 201, 138, 0.25);
+}
+
+/* ---------- Interview extras ---------- */
+
+.inline-note {
+  margin: 0;
+  font-size: 13px;
+  color: #9a9aa5;
+}
+
+.typing-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  max-width: 520px;
+}
+
+.typing-panel textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #1a1b22;
+  color: #f0f0f2;
+  font: inherit;
+  font-size: 14.5px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.typing-panel textarea:focus { outline: none; border-color: #c084fc; }
+
+.finish-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+.interview-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 0.5rem;
+}
+
+.error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.secondary-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.secondary-btn:disabled:hover { border-color: rgba(255, 255, 255, 0.15); color: #e8e8ea; }
+.secondary-btn--danger:hover { border-color: #ff8a8a; color: #ff8a8a; }
+
+/* ---------- Summary extras ---------- */
+
+.save-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-height: 24px;
+  margin: 0 0 1.25rem;
+  font-size: 13.5px;
+  color: #9a9aa5;
+  text-align: left;
+}
+
+.summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.summary-actions .primary-btn { margin-top: 0; }

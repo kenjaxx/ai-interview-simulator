@@ -1,7 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from "react"
 
+const IS_SUPPORTED = typeof window !== "undefined" && "speechSynthesis" in window
+
 // Speaks text aloud and pulses a "word tick" value each time a word boundary fires,
-// so the orb can visually pulse roughly in time with speech (no raw audio stream available for TTS)
+// so the orb can visually pulse roughly in time with speech (no raw audio stream available for TTS).
+// When speech isn't supported, speak() finishes immediately and the caller shows the text instead.
 export function useTextToSpeech() {
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [wordTick, setWordTick] = useState(0)
@@ -13,8 +16,7 @@ export function useTextToSpeech() {
   const speakIdRef = useRef(0)
 
   const speak = useCallback((text, onEnd) => {
-    if (!window.speechSynthesis) {
-      alert("Text-to-speech isn't supported in this browser.")
+    if (!IS_SUPPORTED) {
       onEnd?.()
       return
     }
@@ -63,12 +65,12 @@ export function useTextToSpeech() {
 
   const stop = useCallback(() => {
     speakIdRef.current++ // invalidate any pending callbacks
-    window.speechSynthesis?.cancel()
+    if (IS_SUPPORTED) window.speechSynthesis.cancel()
     setIsSpeaking(false)
   }, [])
 
   // Stop talking if the component goes away.
   useEffect(() => stop, [stop])
 
-  return { isSpeaking, wordTick, speak, stop }
+  return { isSpeaking, isSupported: IS_SUPPORTED, wordTick, speak, stop }
 }
