@@ -95,7 +95,9 @@ export default function App() {
 
   const { isListening, transcript, startListening, finishAnswer, stopListening } = useSpeechRecognition()
   const { speak, stop: stopSpeaking, wordTick } = useTextToSpeech()
-  const { level: micLevel, startTracking, stopTracking } = useAudioLevel()
+  // The mic stream is opened once per interview (acquireMic is idempotent) and released at the end.
+  // getLevel is polled by the Orb directly, so mic volume never causes an App re-render.
+  const { getLevel, acquireMic, releaseMic } = useAudioLevel()
 
   useEffect(() => {
     window.localStorage.setItem(MODE_STORAGE_KEY, aiMode)
@@ -103,29 +105,30 @@ export default function App() {
 
   // User pressed "I'm done" (or the backstop fired) but nothing was captured.
   const handleEmptyAnswer = useCallback(() => {
-    stopTracking()
     setOrbState("idle")
     setError("We didn't catch any speech. Check that your microphone is working, then try this question again.")
-  }, [stopTracking])
+  }, [])
 
   // Mic blocked, recognition unsupported, or recognition kept failing.
   const handleListenError = useCallback((message) => {
-    stopTracking()
     setOrbState("idle")
     setError(message)
-  }, [stopTracking])
+  }, [])
 
   const presentQuestion = useCallback((question) => {
     setCurrentQuestion(question)
     currentQuestionRef.current = question
     setOrbState("speaking")
 
+    // Opens the mic on the first question (or retries if it failed earlier); no-op afterwards.
+    // Not awaited: the level meter is cosmetic and must never block the interview.
+    acquireMic()
+
     speak(question, () => {
       // Response delay is measured from when the interviewer finishes speaking,
       // not from when the question started being read aloud.
       promptShownAtRef.current = Date.now()
       setOrbState("listening")
-      startTracking()
       startListening({
         promptShownAt: promptShownAtRef.current,
         onFinal: (answerText, metrics) => handleAnswerRef.current(answerText, metrics),
@@ -133,11 +136,14 @@ export default function App() {
         onError: handleListenError,
       })
     })
-  }, [speak, startTracking, startListening, handleEmptyAnswer, handleListenError])
+  }, [speak, acquireMic, startListening, handleEmptyAnswer, handleListenError])
 
   const runFinalScoring = useCallback(async () => {
     const interviewId = interviewIdRef.current
     const { role: sessionRole, seniority: sessionSeniority, mode } = sessionConfigRef.current
+
+    // All answers are in, so the interview is over: release the mic now.
+    releaseMic()
 
     setAwaitingFinalScore(true)
     setOrbState("thinking")
@@ -172,10 +178,9 @@ export default function App() {
       setError(messageForError(err))
       setOrbState("idle")
     }
-  }, [])
+  }, [releaseMic])
 
   const handleAnswer = useCallback((answerText, metrics) => {
-    stopTracking()
     setError(null)
 
     const updated = [...qasRef.current, { question: currentQuestionRef.current, answer: answerText, metrics }]
@@ -187,7 +192,7 @@ export default function App() {
     } else {
       presentQuestion(questionsRef.current[updated.length])
     }
-  }, [stopTracking, presentQuestion, runFinalScoring])
+  }, [presentQuestion, runFinalScoring])
 
   useEffect(() => {
     handleAnswerRef.current = handleAnswer
@@ -218,12 +223,12 @@ export default function App() {
     presentQuestion(questionsRef.current[0])
   }
 
-  // Tears everything down: speech, recognition, mic tracking, and any in-flight scoring.
+  // Tears everything down: speech, recognition, mic stream, and any in-flight scoring.
   const restart = useCallback(() => {
     interviewIdRef.current++
     stopSpeaking()
     stopListening()
-    stopTracking()
+    releaseMic()
     setScreen("setup")
     qasRef.current = []
     setAnsweredCount(0)
@@ -235,7 +240,7 @@ export default function App() {
     setOrbState("idle")
     setError(null)
     setAwaitingFinalScore(false)
-  }, [stopSpeaking, stopListening, stopTracking])
+  }, [stopSpeaking, stopListening, releaseMic])
 
   // If the user signs out mid-interview, App stays mounted, so the question would keep being read
   // aloud and the mic would start listening behind the login screen. Tear everything down instead.
@@ -312,7 +317,7 @@ export default function App() {
               : `Question ${Math.min(answeredCount + 1, QUESTION_COUNT)} of ${QUESTION_COUNT}`}
           </p>
 
-          <Orb state={orbState} micLevel={micLevel} wordTick={wordTick} />
+          <Orb state={orbState} getLevel={getLevel} wordTick={wordTick} />
 
           {!awaitingFinalScore && <p className="question-text">{currentQuestion}</p>}
 

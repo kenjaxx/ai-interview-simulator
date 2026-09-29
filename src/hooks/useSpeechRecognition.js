@@ -1,14 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react"
-
-const FILLER_WORDS = ["um", "uh", "like", "you know", "so", "actually", "basically"]
-
-function countFillers(text) {
-  const lower = text.toLowerCase()
-  return FILLER_WORDS.reduce((count, word) => {
-    const matches = lower.match(new RegExp(`\\b${word}\\b`, "g"))
-    return count + (matches ? matches.length : 0)
-  }, 0)
-}
+import { countFillers } from "../lib/fillers"
 
 function getSpeechRecognition() {
   return window.SpeechRecognition || window.webkitSpeechRecognition || null
@@ -39,6 +30,8 @@ const STOP_FALLBACK_MS = 2000
 // Guards against a restart loop when the browser ends recognition instantly, over and over.
 const MAX_RAPID_RESTARTS = 5
 const RAPID_RESTART_WINDOW_MS = 1000
+// Very short answers would produce absurd WPM (8 words in 0.5s = 960), so never divide by less than this.
+const MIN_SPEAKING_SEC = 2
 
 // startListening({ promptShownAt, onFinal, onEmpty, onError })
 //   onFinal(text, { wpm, fillerCount, responseDelaySec }) - user finished with a non-empty answer
@@ -51,7 +44,8 @@ export function useSpeechRecognition() {
   const recognitionRef = useRef(null)
   const silenceTimerRef = useRef(null)
   const fallbackTimerRef = useRef(null)
-  const startTimeRef = useRef(null)
+  const startTimeRef = useRef(null) // when the first words arrived
+  const lastResultAtRef = useRef(null) // when the transcript last actually changed
   const promptShownAtRef = useRef(null)
   const sessionIdRef = useRef(0) // guards against stale/late events from old sessions
 
@@ -89,9 +83,14 @@ export function useSpeechRecognition() {
       return
     }
 
-    const elapsedSec = startTimeRef.current ? (Date.now() - startTimeRef.current) / 1000 : 1
+    // Speaking time runs from the first words to the LAST time the transcript changed, so the
+    // pause between finishing the answer and clicking "done" doesn't drag WPM down.
+    const speakingSec =
+      startTimeRef.current && lastResultAtRef.current
+        ? (lastResultAtRef.current - startTimeRef.current) / 1000
+        : 0
     const wordCount = text.split(/\s+/).filter(Boolean).length
-    const wpm = Math.round((wordCount / Math.max(elapsedSec, 1)) * 60)
+    const wpm = Math.round((wordCount / Math.max(speakingSec, MIN_SPEAKING_SEC)) * 60)
     const fillerCount = countFillers(text)
     const responseDelaySec = startTimeRef.current
       ? Math.round(((startTimeRef.current - promptShownAtRef.current) / 1000) * 10) / 10
@@ -143,13 +142,22 @@ export function useSpeechRecognition() {
 
     recognition.onresult = (event) => {
       if (sessionIdRef.current !== sessionId) return
-      if (!startTimeRef.current) startTimeRef.current = Date.now()
 
       let fullText = ""
       for (let i = 0; i < event.results.length; i++) {
         fullText += event.results[i][0].transcript + " "
       }
-      currentTextRef.current = fullText.trim()
+      fullText = fullText.trim()
+
+      // Only treat this as "the user just spoke" if the text actually changed. Chrome can re-fire
+      // results (e.g. when marking words final) without any new speech.
+      if (fullText !== currentTextRef.current) {
+        const now = Date.now()
+        if (!startTimeRef.current) startTimeRef.current = now
+        lastResultAtRef.current = now
+      }
+
+      currentTextRef.current = fullText
       setTranscript(joinText(committedTextRef.current, currentTextRef.current))
 
       if (!finishingRef.current) armBackstop(sessionId)
@@ -229,6 +237,7 @@ export function useSpeechRecognition() {
     onErrorRef.current = onError || null
     promptShownAtRef.current = promptShownAt || Date.now()
     startTimeRef.current = null
+    lastResultAtRef.current = null
     committedTextRef.current = ""
     currentTextRef.current = ""
     finishingRef.current = false

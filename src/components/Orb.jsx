@@ -2,18 +2,29 @@ import { useEffect, useRef } from "react"
 import "./Orb.css"
 
 // state: "idle" | "listening" | "thinking" | "speaking"
-// micLevel: 0-1, drives pulsing while listening
+// getLevel: () => 0-1 mic volume, polled every frame while listening (no React state involved)
 // wordTick: increments on each spoken word, drives pulsing while speaking
-export default function Orb({ state, micLevel = 0, wordTick = 0 }) {
+export default function Orb({ state, getLevel, wordTick = 0 }) {
   const orbRef = useRef(null)
   const speakPulseTimeout = useRef(null)
 
-  // Listening: scale reacts continuously to mic volume
+  // Listening: poll the mic level every frame and write the scale directly to the DOM.
+  // The loop only runs while listening and is cancelled as soon as the state changes.
   useEffect(() => {
-    if (state !== "listening" || !orbRef.current) return
-    const scale = 1 + Math.min(micLevel, 1) * 0.35
-    orbRef.current.style.transform = `scale(${scale})`
-  }, [micLevel, state])
+    if (state !== "listening") return
+
+    let rafId
+    const tick = () => {
+      const level = getLevel ? getLevel() : 0
+      if (orbRef.current) {
+        orbRef.current.style.transform = `scale(${1 + Math.min(level, 1) * 0.35})`
+      }
+      rafId = requestAnimationFrame(tick)
+    }
+    tick()
+
+    return () => cancelAnimationFrame(rafId)
+  }, [state, getLevel])
 
   // Speaking: quick pulse on every word boundary from TTS
   useEffect(() => {
