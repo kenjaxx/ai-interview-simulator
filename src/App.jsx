@@ -28,14 +28,32 @@ const ROLE_OPTIONS = [
 ]
 
 function messageForError(err) {
+  if (err?.status === 401) {
+    return "Your session expired. Please sign out and sign in again."
+  }
+
   if (err?.isQuotaError) {
+    // Your personal daily allowance is used up
+    if (err.limitScope === "user" && err.isDailyQuota) {
+      return "You've used all of your AI evaluations for today. They reset at midnight UTC — switch to Practice Mode for unlimited local scoring."
+    }
+    // The whole app's daily budget is used up
+    if (err.limitScope === "global") {
+      return "The app's daily AI budget has been used up. Try Practice Mode, or come back tomorrow."
+    }
+    // Gemini's own daily quota
     if (err.isDailyQuota) {
-      return "You've hit today's free-tier request limit. This resets at midnight Pacific Time — check your real usage at ai.dev/rate-limit, or switch to Practice Mode for unlimited local scoring."
+      return "The AI service has hit its daily request limit. It resets at midnight Pacific Time — switch to Practice Mode for unlimited local scoring."
     }
     return err.retryAfterSeconds
       ? `Too many requests right now — try again in about ${err.retryAfterSeconds}s.`
       : "You've hit the AI request limit for now. Please wait a bit and try again."
   }
+
+  if (err?.status === 503) {
+    return "Couldn't check your usage limit right now. Please try again in a moment."
+  }
+
   return "Couldn't reach the interviewer AI. Check your connection and try again."
 }
 
@@ -50,7 +68,7 @@ export default function App() {
     return window.localStorage.getItem(MODE_STORAGE_KEY) === "full" ? "full" : "practice"
   })
 
-  const [orbState, setOrbState] = useState("idle")
+  const [orbState, setOrbState] = useState("idle") // "idle" | "listening" | "thinking" | "speaking"
   const [currentQuestion, setCurrentQuestion] = useState("")
   const [answeredCount, setAnsweredCount] = useState(0)
   const [session, setSession] = useState([])
@@ -65,39 +83,76 @@ export default function App() {
   const questionsRef = useRef([])
   const currentQuestionRef = useRef("")
   const qasRef = useRef([])
-  const sessionModeRef = useRef("practice")
+  // Role, seniority and mode are locked in at startInterview() and read from here by the
+  // scoring call. This is what keeps scoring from using stale values from an old render.
+  const sessionConfigRef = useRef({ role: ROLE_OPTIONS[0], seniority: "Mid-level", mode: "practice" })
+  // Bumped whenever an interview starts or is torn down, so late async results
+  // (e.g. a scoring response arriving after sign-out) can be recognized as stale and dropped.
+  const interviewIdRef = useRef(0)
+  // Always points at the latest handleAnswer. Speech callbacks call through this ref, which
+  // breaks the presentQuestion <-> handleAnswer dependency cycle without stale closures.
+  const handleAnswerRef = useRef(() => {})
 
   const { isListening, transcript, startListening, finishAnswer, stopListening } = useSpeechRecognition()
-  const { speak } = useTextToSpeech()
+  const { speak, stop: stopSpeaking, wordTick } = useTextToSpeech()
   const { level: micLevel, startTracking, stopTracking } = useAudioLevel()
 
   useEffect(() => {
     window.localStorage.setItem(MODE_STORAGE_KEY, aiMode)
   }, [aiMode])
 
+  // User pressed "I'm done" (or the backstop fired) but nothing was captured.
+  const handleEmptyAnswer = useCallback(() => {
+    stopTracking()
+    setOrbState("idle")
+    setError("We didn't catch any speech. Check that your microphone is working, then try this question again.")
+  }, [stopTracking])
+
+  // Mic blocked, recognition unsupported, or recognition kept failing.
+  const handleListenError = useCallback((message) => {
+    stopTracking()
+    setOrbState("idle")
+    setError(message)
+  }, [stopTracking])
+
   const presentQuestion = useCallback((question) => {
     setCurrentQuestion(question)
     currentQuestionRef.current = question
     setOrbState("speaking")
-    promptShownAtRef.current = Date.now()
 
     speak(question, () => {
+      // Response delay is measured from when the interviewer finishes speaking,
+      // not from when the question started being read aloud.
+      promptShownAtRef.current = Date.now()
       setOrbState("listening")
       startTracking()
-      startListening(handleAnswer, promptShownAtRef.current)
+      startListening({
+        promptShownAt: promptShownAtRef.current,
+        onFinal: (answerText, metrics) => handleAnswerRef.current(answerText, metrics),
+        onEmpty: handleEmptyAnswer,
+        onError: handleListenError,
+      })
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [speak, startTracking, startListening])
+  }, [speak, startTracking, startListening, handleEmptyAnswer, handleListenError])
 
   const runFinalScoring = useCallback(async () => {
+    const interviewId = interviewIdRef.current
+    const { role: sessionRole, seniority: sessionSeniority, mode } = sessionConfigRef.current
+
     setAwaitingFinalScore(true)
     setOrbState("thinking")
     setError(null)
 
     try {
-      const { evaluations, overallSummary } = await evaluateSession({
-        role, seniority, qas: qasRef.current, mock: sessionModeRef.current === "practice",
+      const { evaluations, overallSummary: summaryText } = await evaluateSession({
+        role: sessionRole,
+        seniority: sessionSeniority,
+        qas: qasRef.current,
+        mock: mode === "practice",
       })
+
+      // The user left (signed out / restarted) while we were waiting - drop the result.
+      if (interviewIdRef.current !== interviewId) return
 
       const finalSession = qasRef.current.map((qa, i) => ({
         question: qa.question,
@@ -107,16 +162,17 @@ export default function App() {
       }))
 
       setSession(finalSession)
-      setOverallSummary(overallSummary || "")
+      setOverallSummary(summaryText || "")
       setScreen("summary")
       setOrbState("idle")
       setAwaitingFinalScore(false)
     } catch (err) {
+      if (interviewIdRef.current !== interviewId) return
       console.error("Failed to score the session:", err)
       setError(messageForError(err))
-      setOrbState("error")
+      setOrbState("idle")
     }
-  }, [role, seniority])
+  }, [])
 
   const handleAnswer = useCallback((answerText, metrics) => {
     stopTracking()
@@ -133,6 +189,10 @@ export default function App() {
     }
   }, [stopTracking, presentQuestion, runFinalScoring])
 
+  useEffect(() => {
+    handleAnswerRef.current = handleAnswer
+  }, [handleAnswer])
+
   const retryCurrentQuestion = () => {
     setError(null)
     if (awaitingFinalScore) {
@@ -143,8 +203,9 @@ export default function App() {
   }
 
   const startInterview = () => {
+    interviewIdRef.current++
+    sessionConfigRef.current = { role, seniority, mode: aiMode }
     qasRef.current = []
-    sessionModeRef.current = aiMode
     setSessionMode(aiMode)
     setAnsweredCount(0)
     setSession([])
@@ -157,7 +218,10 @@ export default function App() {
     presentQuestion(questionsRef.current[0])
   }
 
-  const restart = () => {
+  // Tears everything down: speech, recognition, mic tracking, and any in-flight scoring.
+  const restart = useCallback(() => {
+    interviewIdRef.current++
+    stopSpeaking()
     stopListening()
     stopTracking()
     setScreen("setup")
@@ -171,7 +235,13 @@ export default function App() {
     setOrbState("idle")
     setError(null)
     setAwaitingFinalScore(false)
-  }
+  }, [stopSpeaking, stopListening, stopTracking])
+
+  // If the user signs out mid-interview, App stays mounted, so the question would keep being read
+  // aloud and the mic would start listening behind the login screen. Tear everything down instead.
+  useEffect(() => {
+    if (!authLoading && !user) restart()
+  }, [user, authLoading, restart])
 
   if (authLoading) {
     return (
@@ -221,6 +291,11 @@ export default function App() {
 
           <button className="primary-btn" onClick={startInterview}>Start interview</button>
           <p className="setup-note">You'll need microphone access — {QUESTION_COUNT} questions, spoken answers.</p>
+          <p className="setup-note">
+            Privacy: speech-to-text is done by your browser, and Chrome and Edge send audio to their
+            own cloud services for that. In Full AI Mode, your transcribed answers are also sent to
+            Google's Gemini API for scoring. Practice Mode scores locally and sends nothing to our AI.
+          </p>
         </div>
       </div>
     )
@@ -237,7 +312,7 @@ export default function App() {
               : `Question ${Math.min(answeredCount + 1, QUESTION_COUNT)} of ${QUESTION_COUNT}`}
           </p>
 
-          <Orb state={orbState === "error" ? "idle" : orbState} micLevel={micLevel} />
+          <Orb state={orbState} micLevel={micLevel} wordTick={wordTick} />
 
           {!awaitingFinalScore && <p className="question-text">{currentQuestion}</p>}
 

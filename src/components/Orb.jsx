@@ -25,12 +25,17 @@ export default function Orb({ state, micLevel = 0, wordTick = 0 }) {
     }, 140)
   }, [wordTick, state])
 
-  // Reset transform when leaving listening/speaking states
+  // Leaving the speaking state: drop any pending pulse reset, and
+  // reset the transform when going back to idle/thinking
   useEffect(() => {
+    if (state !== "speaking") clearTimeout(speakPulseTimeout.current)
     if ((state === "idle" || state === "thinking") && orbRef.current) {
       orbRef.current.style.transform = "scale(1)"
     }
   }, [state])
+
+  // Don't leave a timer running after unmount
+  useEffect(() => () => clearTimeout(speakPulseTimeout.current), [])
 
   return (
     <div className="orb-wrap">

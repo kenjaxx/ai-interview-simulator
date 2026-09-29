@@ -5,13 +5,19 @@ import { auth } from "./firebase"
 const MOCK_MODE = import.meta.env.VITE_MOCK_AI === "true"
 
 export class GeminiApiError extends Error {
-  constructor(message, { status, isQuotaError = false, isDailyQuota = false, retryAfterSeconds = null } = {}) {
+  constructor(
+    message,
+    { status, isQuotaError = false, isDailyQuota = false, retryAfterSeconds = null, limitScope = null } = {}
+  ) {
     super(message)
     this.name = "GeminiApiError"
     this.status = status
     this.isQuotaError = isQuotaError
     this.isDailyQuota = isDailyQuota
     this.retryAfterSeconds = retryAfterSeconds
+    // Who ran out: "user" (your personal allowance), "global" (the whole app's budget),
+    // or "provider" (Gemini itself is rate-limiting).
+    this.limitScope = limitScope
   }
 }
 
@@ -63,6 +69,7 @@ async function callBackend(payload) {
         isQuotaError: true,
         isDailyQuota: !!body?.isDailyQuota,
         retryAfterSeconds: body?.retryAfterSeconds ?? null,
+        limitScope: body?.limitScope ?? null,
       })
     }
     throw new GeminiApiError(body?.error || "Couldn't reach the interviewer AI.", { status: res.status })
@@ -141,7 +148,7 @@ function mockEvaluation(answer = "", metrics = {}) {
 
 // Called ONCE per interview with every question/answer/metrics triple.
 // Practice Mode is scored locally; Full AI Mode goes through /api/evaluate,
-// which verifies the Firebase login and holds the Gemini key server-side.
+// which verifies the Firebase login, enforces usage limits, and holds the Gemini key server-side.
 //
 // qas: [{ question, answer, metrics: { fillerCount, wpm, responseDelaySec } }, ...]
 export async function evaluateSession({ role, seniority, qas, mock = false }) {

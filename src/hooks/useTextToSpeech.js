@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react"
+import { useState, useRef, useCallback, useEffect } from "react"
 
 // Speaks text aloud and pulses a "word tick" value each time a word boundary fires,
 // so the orb can visually pulse roughly in time with speech (no raw audio stream available for TTS)
@@ -7,6 +7,10 @@ export function useTextToSpeech() {
   const [wordTick, setWordTick] = useState(0)
 
   const utteranceRef = useRef(null)
+  // Each speak() call gets an id. stop() and any newer speak() bump it, so callbacks from
+  // cancelled/replaced speech (the browser fires onend/onerror on cancel) are ignored
+  // instead of, say, starting the microphone after the user already left the interview.
+  const speakIdRef = useRef(0)
 
   const speak = useCallback((text, onEnd) => {
     if (!window.speechSynthesis) {
@@ -15,6 +19,8 @@ export function useTextToSpeech() {
       return
     }
 
+    const id = ++speakIdRef.current
+
     // Cancel anything currently speaking before starting new speech
     window.speechSynthesis.cancel()
 
@@ -22,23 +28,33 @@ export function useTextToSpeech() {
     utterance.rate = 1.0
     utterance.pitch = 1.0
 
-    utterance.onstart = () => setIsSpeaking(true)
+    let finished = false
+    const finish = () => {
+      if (finished || speakIdRef.current !== id) return
+      finished = true
+      setIsSpeaking(false)
+      onEnd?.()
+    }
+
+    utterance.onstart = () => {
+      if (speakIdRef.current === id) setIsSpeaking(true)
+    }
 
     utterance.onboundary = (event) => {
+      if (speakIdRef.current !== id) return
       if (event.name === "word") {
         setWordTick((tick) => tick + 1)
       }
     }
 
-    utterance.onend = () => {
-      setIsSpeaking(false)
-      onEnd?.()
-    }
+    utterance.onend = finish
 
     utterance.onerror = (event) => {
-      console.error("TTS error:", event.error)
-      setIsSpeaking(false)
-      onEnd?.()
+      // "canceled"/"interrupted" are expected when we stop or replace speech on purpose.
+      if (event.error !== "canceled" && event.error !== "interrupted") {
+        console.error("TTS error:", event.error)
+      }
+      finish()
     }
 
     utteranceRef.current = utterance
@@ -46,9 +62,13 @@ export function useTextToSpeech() {
   }, [])
 
   const stop = useCallback(() => {
-    window.speechSynthesis.cancel()
+    speakIdRef.current++ // invalidate any pending callbacks
+    window.speechSynthesis?.cancel()
     setIsSpeaking(false)
   }, [])
+
+  // Stop talking if the component goes away.
+  useEffect(() => stop, [stop])
 
   return { isSpeaking, wordTick, speak, stop }
 }
