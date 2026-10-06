@@ -1,55 +1,70 @@
 import { createRemoteJWKSet, jwtVerify } from "jose"
 import { consumeRequest, RATE_LIMITS } from "../server/rateLimit.js"
+import { ROLES as ROLE_LIST, SENIORITIES as SENIORITY_LIST } from "../shared/options.js"
 
 export const config = { maxDuration: 60 }
 
 const PROJECT_ID = process.env.FIREBASE_PROJECT_ID
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
-// Override with the GEMINI_MODEL env var. You can list the models your key can use at
+
+// Firebase App Check. FIREBASE_PROJECT_NUMBER is the numeric "Project number" in Firebase project
+// settings (it's the same value as the web app's messagingSenderId).
+// Set APP_CHECK_ENFORCE=true to reject requests without a valid token. Until then the server runs in
+// monitor mode: a valid token is checked and logged if bad, but nothing is blocked. That lets you
+// roll App Check out and watch the logs before turning it on.
+const PROJECT_NUMBER = process.env.FIREBASE_PROJECT_NUMBER
+const APP_CHECK_ENFORCE = process.env.APP_CHECK_ENFORCE === "true"
+
+// Override with GEMINI_MODEL / GEMINI_FALLBACK_MODEL. You can list the models your key can use at
 // https://generativelanguage.googleapis.com/v1beta/models (send your key in the x-goog-api-key header).
+// The fallback is tried once if the primary fails transiently (overloaded, rate-limited, unreachable).
+// Quotas are tracked per model, so a different fallback can still work when the primary is exhausted.
 const MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash"
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`
+const FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || "gemini-2.5-flash"
+const geminiUrl = (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
 
 // Google's public keys for verifying Firebase ID tokens
 const JWKS = createRemoteJWKSet(
   new URL("https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com")
 )
+// ...and for verifying App Check tokens
+const APP_CHECK_JWKS = createRemoteJWKSet(new URL("https://firebaseappcheck.googleapis.com/v1/jwks"))
 
-// Keep in sync with ROLE_OPTIONS in the client.
-const ROLES = new Set([
-  "Frontend Developer",
-  "Backend Developer",
-  "Full-Stack Developer",
-  "Mobile Developer",
-  "DevOps Engineer",
-  "Data Analyst / Data Scientist",
-  "QA / Test Engineer",
-  "Tech Support / IT Support",
-  "Product Manager",
-  "UI/UX Designer",
-])
-const SENIORITIES = new Set(["Entry-level", "Mid-level", "Senior"])
+const ROLES = new Set(ROLE_LIST)
+const SENIORITIES = new Set(SENIORITY_LIST)
 
 const MAX_QAS = 10
 const MAX_QUESTION_CHARS = 500
 const MAX_ANSWER_CHARS = 4000
 const MAX_TOTAL_CHARS = 20000 // across all questions + answers, caps the tokens one request can cost
 const MAX_OUTPUT_TOKENS = 8192 // generous, because "thinking" tokens can count toward this on some models
-const GEMINI_TIMEOUT_MS = 45_000
 
+// Time budget. The function is killed at maxDuration (60s), so everything, including a retry, has to
+// fit well inside that or the user gets a hard platform timeout instead of a clean error.
+const TOTAL_BUDGET_MS = 52_000
+const ATTEMPT_TIMEOUT_MS = 40_000
+const MIN_RETRY_WINDOW_MS = 8_000 // don't start a second attempt with less time than this left
+const SHORT_RETRY_SEC = 10 // a 429 asking us to wait longer than this isn't worth retrying on the same model
+
+// What to do with the user's reserved evaluation when a request fails:
+//   refund: "always" - clear provider-side failure, the user got nothing and it wasn't their doing
+//   refund: "capped" - ambiguous failure (timeout, cut-off or unreadable output). Refunded, but only
+//                      up to a small daily cap per user, so crafted input can't farm free requests
+//   refund: null     - the user's own doing (bad input, blocked content): no refund
 class HttpError extends Error {
-  // refundable: the request failed on the provider's side before producing anything useful, so the
-  // user's daily allowance is given back. Failures that may have cost tokens (bad output, timeouts,
-  // blocked content) are NOT refundable, otherwise crafted input could get free requests.
-  constructor(status, message, extra = {}, { refundable = false } = {}) {
+  constructor(status, message, extra = {}, { refund = null, retryable = false, retryDelaySec = null } = {}) {
     super(message)
     this.status = status
     this.extra = extra
-    this.refundable = refundable
+    this.refund = refund
+    this.retryable = retryable // worth one more attempt (on the fallback model if there is one)
+    this.retryDelaySec = retryDelaySec
   }
 }
 
 // ---------- helpers ----------
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 function clampNumber(value, min, max) {
   const n = Number(value)
@@ -62,6 +77,31 @@ const clampText = (v, max) => (typeof v === "string" ? v.slice(0, max) : "")
 // Answers are untrusted text that goes into the prompt. Removing angle brackets means an answer
 // can never close our <answer> tag early and pretend to be instructions.
 const stripTags = (text) => text.replace(/[<>]/g, "")
+
+// App Check proves the request comes from your real, attested web app and not a script that
+// replays a stolen Firebase login token.
+async function verifyAppCheck(req) {
+  const raw = req.headers["x-firebase-appcheck"]
+  const token = typeof raw === "string" && raw ? raw : null
+
+  if (!token) {
+    if (APP_CHECK_ENFORCE) throw new HttpError(403, "This request couldn't be verified. Please reload the page and try again.")
+    return
+  }
+
+  try {
+    await jwtVerify(token, APP_CHECK_JWKS, {
+      issuer: `https://firebaseappcheck.googleapis.com/${PROJECT_NUMBER}`,
+      audience: `projects/${PROJECT_NUMBER}`,
+      algorithms: ["RS256"],
+    })
+  } catch (err) {
+    if (APP_CHECK_ENFORCE) {
+      throw new HttpError(403, "This request couldn't be verified. Please reload the page and try again.")
+    }
+    console.warn("[appCheck] invalid token (monitor mode, not blocking):", err.message)
+  }
+}
 
 async function verifyUser(req) {
   const header = req.headers.authorization || ""
@@ -91,7 +131,7 @@ function validateInput(body) {
     throw new HttpError(400, `Expected between 1 and ${MAX_QAS} answers.`)
   }
 
-   const cleanQas = qas.map((qa) => ({
+  const cleanQas = qas.map((qa) => ({
     question: clampText(qa?.question, MAX_QUESTION_CHARS),
     answer: clampText(qa?.answer, MAX_ANSWER_CHARS),
     inputMethod: qa?.inputMethod === "text" ? "text" : "voice",
@@ -227,78 +267,120 @@ function buildResponseSchema(count) {
   }
 }
 
-async function callGemini(systemPrompt, userPrompt, expectedCount) {
+// One attempt against one model. Throws an HttpError that says whether it's refundable and retryable.
+async function callGeminiOnce(model, systemPrompt, userPrompt, expectedCount, timeoutMs) {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS)
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  const timedOut = () => new HttpError(504, "The AI took too long to respond. Please retry.", {}, { refund: "capped" })
 
-  let res
   try {
-    res = await fetch(GEMINI_URL, {
-      method: "POST",
-      signal: controller.signal,
-      headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: buildResponseSchema(expectedCount),
-          temperature: 0.3,
-          maxOutputTokens: MAX_OUTPUT_TOKENS,
-        },
-      }),
-    })
-  } catch (err) {
-    if (err.name === "AbortError") throw new HttpError(504, "The AI took too long to respond. Please retry.")
-    console.error("Gemini network error", err)
-    throw new HttpError(502, "Couldn't reach the AI service.", {}, { refundable: true })
+    let res
+    try {
+      res = await fetch(geminiUrl(model), {
+        method: "POST",
+        signal: controller.signal,
+        headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: buildResponseSchema(expectedCount),
+            temperature: 0.3,
+            maxOutputTokens: MAX_OUTPUT_TOKENS,
+          },
+        }),
+      })
+    } catch (err) {
+      if (err.name === "AbortError") throw timedOut()
+      console.error(`Gemini network error (${model})`, err)
+      throw new HttpError(502, "Couldn't reach the AI service.", {}, { refund: "always", retryable: true })
+    }
+
+    if (!res.ok) {
+      let errBody = null
+      try { errBody = await res.json() } catch { /* not JSON */ }
+
+      if (res.status === 429) {
+        const isDailyQuota = !!errBody?.error?.details?.some((d) =>
+          d.violations?.some((v) => v.quotaId?.toLowerCase().includes("perday"))
+        )
+        const retryAfterSeconds = parseRetryDelaySeconds(errBody)
+        throw new HttpError(
+          429,
+          isDailyQuota
+            ? "The daily AI request limit has been reached."
+            : "Too many requests right now — the AI is rate-limiting.",
+          { isDailyQuota, retryAfterSeconds, limitScope: "provider" },
+          { refund: "always", retryable: true, retryDelaySec: retryAfterSeconds }
+        )
+      }
+
+      // Full details go to server logs only, never to the client.
+      console.error(`Gemini API error (${model})`, res.status, JSON.stringify(errBody))
+      // 5xx and a missing model are worth one more try (the fallback model may be healthy).
+      // Other 4xx (bad key, bad request) would fail the same way again.
+      const retryable = res.status >= 500 || res.status === 404
+      throw new HttpError(502, "The AI service returned an error.", {}, { refund: "always", retryable })
+    }
+
+    let data
+    try {
+      data = await res.json()
+    } catch (err) {
+      if (controller.signal.aborted) throw timedOut()
+      console.error(`Gemini response body unreadable (${model})`, err.message)
+      throw new HttpError(502, "The AI returned an unreadable response.", {}, { refund: "capped" })
+    }
+
+    if (data?.promptFeedback?.blockReason) {
+      // Caused by the user's content, so no refund.
+      console.error("Gemini blocked the prompt:", data.promptFeedback.blockReason)
+      throw new HttpError(422, "The AI couldn't evaluate this content.")
+    }
+
+    const candidate = data?.candidates?.[0]
+    if (candidate?.finishReason === "MAX_TOKENS") {
+      console.error(`Gemini response was cut off (MAX_TOKENS, ${model})`)
+      throw new HttpError(502, "The AI's response was cut off. Please retry.", {}, { refund: "capped" })
+    }
+
+    // Skip any "thought" parts and join the rest, so this works whether or not the model returns thoughts.
+    const text = (candidate?.content?.parts || [])
+      .filter((p) => !p.thought && typeof p.text === "string")
+      .map((p) => p.text)
+      .join("")
+    if (!text) throw new HttpError(502, "The AI returned an empty response.", {}, { refund: "capped" })
+    return text
   } finally {
     clearTimeout(timer)
   }
+}
 
-  if (!res.ok) {
-    let errBody = null
-    try { errBody = await res.json() } catch { /* not JSON */ }
+// Tries the primary model; on a transient failure waits briefly and tries ONE more time
+// (on the fallback model if it's different), all inside one overall time budget.
+async function callGemini(systemPrompt, userPrompt, expectedCount) {
+  const deadline = Date.now() + TOTAL_BUDGET_MS
+  const models = [MODEL, FALLBACK_MODEL]
+  const sameModel = MODEL === FALLBACK_MODEL
 
-    if (res.status === 429) {
-      const isDailyQuota = !!errBody?.error?.details?.some((d) =>
-        d.violations?.some((v) => v.quotaId?.toLowerCase().includes("perday"))
-      )
-      throw new HttpError(
-        429,
-        isDailyQuota
-          ? "The daily AI request limit has been reached."
-          : "Too many requests right now — the AI is rate-limiting.",
-        { isDailyQuota, retryAfterSeconds: parseRetryDelaySeconds(errBody), limitScope: "provider" },
-        { refundable: true }
-      )
-    }
+  try {
+    return await callGeminiOnce(models[0], systemPrompt, userPrompt, expectedCount, ATTEMPT_TIMEOUT_MS)
+  } catch (err) {
+    if (!(err instanceof HttpError) || !err.retryable) throw err
 
-    // Full details go to server logs only, never to the client.
-    console.error("Gemini API error", res.status, JSON.stringify(errBody))
-    throw new HttpError(502, "The AI service returned an error.", {}, { refundable: true })
+    // Same model: honor the server's retry hint, but not if it asks for a long wait.
+    // Different model: it has its own quota and capacity, so go almost immediately.
+    if (sameModel && err.status === 429 && err.retryDelaySec > SHORT_RETRY_SEC) throw err
+    const waitMs = sameModel ? Math.max(1, err.retryDelaySec ?? 1) * 1000 : 300
+
+    const remaining = deadline - Date.now() - waitMs
+    if (remaining < MIN_RETRY_WINDOW_MS) throw err // not enough time left for a real second attempt
+
+    console.warn(`Gemini ${models[0]} failed (${err.status}); retrying with ${models[1]} in ${waitMs}ms`)
+    await sleep(waitMs)
+    return await callGeminiOnce(models[1], systemPrompt, userPrompt, expectedCount, Math.min(ATTEMPT_TIMEOUT_MS, remaining))
   }
-
-  const data = await res.json()
-
-  if (data?.promptFeedback?.blockReason) {
-    console.error("Gemini blocked the prompt:", data.promptFeedback.blockReason)
-    throw new HttpError(422, "The AI couldn't evaluate this content.")
-  }
-
-  const candidate = data?.candidates?.[0]
-  if (candidate?.finishReason === "MAX_TOKENS") {
-    console.error("Gemini response was cut off (MAX_TOKENS)")
-    throw new HttpError(502, "The AI's response was cut off. Please retry.")
-  }
-
-  // Skip any "thought" parts and join the rest, so this works whether or not the model returns thoughts.
-  const text = (candidate?.content?.parts || [])
-    .filter((p) => !p.thought && typeof p.text === "string")
-    .map((p) => p.text)
-    .join("")
-  if (!text) throw new HttpError(502, "The AI returned an empty response.")
-  return text
 }
 
 function parseAndNormalize(rawText, expectedCount) {
@@ -308,12 +390,12 @@ function parseAndNormalize(rawText, expectedCount) {
   } catch (err) {
     // Log the size, not the content: transcripts are personal data.
     console.error("Failed to parse Gemini JSON:", err.message, `(length ${rawText.length})`)
-    throw new HttpError(502, "The AI returned an unreadable response.")
+    throw new HttpError(502, "The AI returned an unreadable response.", {}, { refund: "capped" })
   }
 
   if (!Array.isArray(parsed?.evaluations) || parsed.evaluations.length !== expectedCount) {
     console.error("Evaluation count mismatch", expectedCount, parsed?.evaluations?.length)
-    throw new HttpError(502, "The AI response didn't match the questions asked.")
+    throw new HttpError(502, "The AI response didn't match the questions asked.", {}, { refund: "capped" })
   }
 
   return {
@@ -343,8 +425,13 @@ export default async function handler(req, res) {
       console.error("Missing FIREBASE_PROJECT_ID or GEMINI_API_KEY env var")
       throw new HttpError(500, "Server is not configured.")
     }
+    if ((APP_CHECK_ENFORCE || req.headers["x-firebase-appcheck"]) && !PROJECT_NUMBER) {
+      console.error("Missing FIREBASE_PROJECT_NUMBER env var (needed for App Check)")
+      throw new HttpError(500, "Server is not configured.")
+    }
 
     // Order matters for cost: cheap checks first, quota is only spent once the request is valid.
+    await verifyAppCheck(req)
     const uid = await verifyUser(req)
     const { role, seniority, qas } = validateInput(req.body)
     reservation = await reserveRequest(uid)
@@ -357,15 +444,18 @@ export default async function handler(req, res) {
       usage: { remaining: reservation.remaining, limit: reservation.limit },
     })
   } catch (err) {
-    if (reservation && err instanceof HttpError && err.refundable) {
-      await reservation.refund()
+    let refunded = false
+    if (reservation && err instanceof HttpError && err.refund) {
+      refunded = await reservation.refund({ capped: err.refund === "capped" })
     }
 
     if (err instanceof HttpError) {
       if (err.extra.retryAfterSeconds) res.setHeader("Retry-After", String(err.extra.retryAfterSeconds))
-      return res.status(err.status).json({ error: err.message, ...err.extra })
+      return res.status(err.status).json({ error: err.message, ...err.extra, refunded })
     }
     console.error("Unexpected error", err)
+    // An unexpected server-side crash after we reserved a request: the user got nothing.
+    if (reservation) await reservation.refund({ capped: true })
     return res.status(500).json({ error: "Something went wrong." })
   }
 }
