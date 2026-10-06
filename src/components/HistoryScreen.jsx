@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react"
-import { loadHistory, deleteSession } from "../lib/history"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { loadHistoryPage, getCachedHistory, deleteSession } from "../lib/history"
 import SessionReview from "./SessionReview"
 import "./HistoryScreen.css"
 
@@ -21,32 +21,61 @@ function formatDate(date) {
 }
 
 export default function HistoryScreen({ uid, onBack }) {
-  const [status, setStatus] = useState("loading") // "loading" | "ready" | "error"
-  const [sessions, setSessions] = useState([])
-  const [reloadKey, setReloadKey] = useState(0)
+  // If History was opened before, the sessions loaded then are shown instantly with no refetch.
+  const [initial] = useState(() => getCachedHistory(uid))
+
+  const [status, setStatus] = useState(initial ? "ready" : "loading") // "loading" | "ready" | "error"
+  const [sessions, setSessions] = useState(initial?.sessions ?? [])
+  const [hasMore, setHasMore] = useState(initial?.hasMore ?? false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [loadMoreError, setLoadMoreError] = useState(false)
   const [filter, setFilter] = useState("all")
   const [openId, setOpenId] = useState(null)
   const [confirmId, setConfirmId] = useState(null)
   const [deleteError, setDeleteError] = useState(null)
 
+  const mountedRef = useRef(false)
   useEffect(() => {
-    let cancelled = false
-    loadHistory(uid)
-      .then((list) => {
-        if (cancelled) return
-        setSessions(list)
-        setStatus("ready")
-      })
-      .catch((err) => {
-        console.error("Couldn't load history:", err)
-        if (!cancelled) setStatus("error")
-      })
-    return () => { cancelled = true }
-  }, [uid, reloadKey])
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
-  const retry = () => {
+  const applyEntry = useCallback((entry) => {
+    setSessions(entry.sessions)
+    setHasMore(entry.hasMore)
+  }, [])
+
+  // Loads page 1. refresh=true throws away the cache first.
+  const loadFirstPage = useCallback(async (refresh = false) => {
     setStatus("loading")
-    setReloadKey((k) => k + 1)
+    try {
+      const entry = await loadHistoryPage(uid, { refresh })
+      if (!mountedRef.current) return
+      applyEntry(entry)
+      setStatus("ready")
+    } catch (err) {
+      console.error("Couldn't load history:", err)
+      if (mountedRef.current) setStatus("error")
+    }
+  }, [uid, applyEntry])
+
+  useEffect(() => {
+    if (!initial) loadFirstPage(false)
+  }, [initial, loadFirstPage])
+
+  const loadMore = async () => {
+    if (loadingMore) return
+    setLoadingMore(true)
+    setLoadMoreError(false)
+    try {
+      const entry = await loadHistoryPage(uid)
+      if (mountedRef.current) applyEntry(entry)
+    } catch (err) {
+      console.error("Couldn't load more history:", err)
+      if (mountedRef.current) setLoadMoreError(true)
+    } finally {
+      if (mountedRef.current) setLoadingMore(false)
+    }
   }
 
   const handleDelete = async (id) => {
@@ -62,6 +91,7 @@ export default function HistoryScreen({ uid, onBack }) {
     }
   }
 
+  // Filters and stats apply to the sessions loaded so far (a "+" shows when more exist).
   const visible = sessions.filter((s) => filter === "all" || s.mode === filter)
   const chronological = [...visible].reverse().slice(-20)
   const overallAverage = visible.length
@@ -73,7 +103,12 @@ export default function HistoryScreen({ uid, onBack }) {
     <div className="history-shell">
       <div className="history-head">
         <h1>Your progress</h1>
-        <button className="secondary-btn" onClick={onBack}>← Back</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          {status === "ready" && (
+            <button className="secondary-btn" onClick={() => loadFirstPage(true)}>Refresh</button>
+          )}
+          <button className="secondary-btn" onClick={onBack}>← Back</button>
+        </div>
       </div>
 
       {status === "loading" && (
@@ -86,7 +121,7 @@ export default function HistoryScreen({ uid, onBack }) {
       {status === "error" && (
         <div className="error-panel" role="alert">
           <p>Couldn't load your history. Check your connection and try again.</p>
-          <button className="secondary-btn" onClick={retry}>Retry</button>
+          <button className="secondary-btn" onClick={() => loadFirstPage(true)}>Retry</button>
         </div>
       )}
 
@@ -114,11 +149,13 @@ export default function HistoryScreen({ uid, onBack }) {
           </div>
 
           {visible.length === 0 ? (
-            <p className="history-empty">No sessions in this mode yet.</p>
+            <p className="history-empty">
+              No sessions in this mode{hasMore ? " among the ones loaded so far" : " yet"}.
+            </p>
           ) : (
             <>
               <div className="score-row">
-                <div className="score-card"><span>{visible.length}</span><label>Sessions</label></div>
+                <div className="score-card"><span>{visible.length}{hasMore ? "+" : ""}</span><label>Sessions</label></div>
                 <div className="score-card"><span>{overallAverage}</span><label>Average</label></div>
                 <div className="score-card"><span>{best}</span><label>Best</label></div>
               </div>
@@ -173,6 +210,20 @@ export default function HistoryScreen({ uid, onBack }) {
                 })}
               </ul>
             </>
+          )}
+
+          {loadMoreError && (
+            <p className="history-error" role="alert" style={{ marginTop: "1rem" }}>
+              Couldn't load more sessions. Please try again.
+            </p>
+          )}
+
+          {hasMore && (
+            <div style={{ display: "flex", justifyContent: "center", marginTop: "1.25rem" }}>
+              <button className="secondary-btn" onClick={loadMore} disabled={loadingMore}>
+                {loadingMore ? "Loading…" : "Load more"}
+              </button>
+            </div>
           )}
         </>
       )}

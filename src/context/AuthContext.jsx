@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react"
 import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth"
 import { auth, googleProvider } from "../lib/firebase"
+import { clearHistoryCache } from "../lib/history"
 
 const AuthContext = createContext(null)
 
@@ -31,6 +32,8 @@ export function AuthProvider({ children }) {
   }, [])
 
   const signOutUser = useCallback(async () => {
+    // Cached history belongs to the signed-in user, so drop it on the way out.
+    clearHistoryCache()
     await signOut(auth)
   }, [])
 

@@ -37,9 +37,13 @@ const MIN_SPEAKING_SEC = 2
 //   onFinal(text, { wpm, fillerCount, responseDelaySec }) - user finished with a non-empty answer
 //   onEmpty()                                            - user finished but nothing was captured
 //   onError(message)                                     - mic blocked, unsupported, repeated failures
+//
+// The live transcript is NOT React state here. Interim results arrive many times a second, and
+// putting them in state would re-render whichever component calls this hook. Instead it is exposed
+// as a tiny external store: subscribeTranscript / getTranscript, to be read with useSyncExternalStore
+// by a small component (see LiveTranscript).
 export function useSpeechRecognition() {
   const [isListening, setIsListening] = useState(false)
-  const [transcript, setTranscript] = useState("")
 
   const recognitionRef = useRef(null)
   const silenceTimerRef = useRef(null)
@@ -61,6 +65,25 @@ export function useSpeechRecognition() {
   const finishingRef = useRef(false) // true once the user (or the backstop) asked to stop
   const lastLaunchRef = useRef(0)
   const rapidEndsRef = useRef(0)
+
+  // ---------- live transcript as an external store ----------
+  const transcriptRef = useRef("")
+  const transcriptListenersRef = useRef(new Set())
+
+  const setTranscript = useCallback((text) => {
+    if (transcriptRef.current === text) return
+    transcriptRef.current = text
+    transcriptListenersRef.current.forEach((listener) => listener())
+  }, [])
+
+  const subscribeTranscript = useCallback((listener) => {
+    transcriptListenersRef.current.add(listener)
+    return () => {
+      transcriptListenersRef.current.delete(listener)
+    }
+  }, [])
+
+  const getTranscript = useCallback(() => transcriptRef.current, [])
 
   const clearTimers = useCallback(() => {
     clearTimeout(silenceTimerRef.current)
@@ -218,7 +241,7 @@ export function useSpeechRecognition() {
     lastLaunchRef.current = Date.now()
     recognitionRef.current = recognition
     recognition.start()
-  }, [armBackstop, fail, finalize])
+  }, [armBackstop, fail, finalize, setTranscript])
 
   const startListening = useCallback(({ promptShownAt, onFinal, onEmpty, onError } = {}) => {
     if (!getSpeechRecognition()) {
@@ -252,7 +275,7 @@ export function useSpeechRecognition() {
       console.error("Couldn't start speech recognition:", err)
       fail(sessionId, "Couldn't start the microphone. Please try again.")
     }
-  }, [armBackstop, clearTimers, fail, launch])
+  }, [armBackstop, clearTimers, fail, launch, setTranscript])
 
   // Graceful stop - finalizes and submits the transcript (or reports an empty answer).
   // This is what the "I'm done" button calls.
@@ -273,5 +296,12 @@ export function useSpeechRecognition() {
   // Never leave the mic recognizer running after the component goes away.
   useEffect(() => stopListening, [stopListening])
 
-  return { isListening, transcript, startListening, finishAnswer, stopListening }
+  return {
+    isListening,
+    subscribeTranscript,
+    getTranscript,
+    startListening,
+    finishAnswer,
+    stopListening,
+  }
 }

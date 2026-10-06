@@ -3,8 +3,9 @@ import "./Orb.css"
 
 // state: "idle" | "listening" | "thinking" | "speaking"
 // getLevel: () => 0-1 mic volume, polled every frame while listening (no React state involved)
-// wordTick: increments on each spoken word, drives pulsing while speaking
-export default function Orb({ state, getLevel, wordTick = 0 }) {
+// subscribeWord: (callback) => unsubscribe. Fires on each spoken word, drives pulsing while speaking.
+//   Because it's a subscription rather than a prop that changes, spoken words never re-render React.
+export default function Orb({ state, getLevel, subscribeWord }) {
   const orbRef = useRef(null)
   const speakPulseTimeout = useRef(null)
 
@@ -28,13 +29,20 @@ export default function Orb({ state, getLevel, wordTick = 0 }) {
 
   // Speaking: quick pulse on every word boundary from TTS
   useEffect(() => {
-    if (state !== "speaking" || !orbRef.current) return
-    orbRef.current.style.transform = "scale(1.18)"
-    clearTimeout(speakPulseTimeout.current)
-    speakPulseTimeout.current = setTimeout(() => {
-      if (orbRef.current) orbRef.current.style.transform = "scale(1)"
-    }, 140)
-  }, [wordTick, state])
+    if (state !== "speaking" || !subscribeWord) return
+
+    const pulse = () => {
+      if (!orbRef.current) return
+      orbRef.current.style.transform = "scale(1.18)"
+      clearTimeout(speakPulseTimeout.current)
+      speakPulseTimeout.current = setTimeout(() => {
+        if (orbRef.current) orbRef.current.style.transform = "scale(1)"
+      }, 140)
+    }
+
+    pulse()
+    return subscribeWord(pulse)
+  }, [state, subscribeWord])
 
   // Leaving the speaking state: drop any pending pulse reset, and
   // reset the transform when going back to idle/thinking

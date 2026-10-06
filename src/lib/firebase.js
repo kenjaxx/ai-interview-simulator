@@ -1,7 +1,10 @@
 import { initializeApp } from "firebase/app"
 import { getAuth, GoogleAuthProvider } from "firebase/auth"
-import { getFirestore } from "firebase/firestore"
 import { initializeAppCheck, ReCaptchaV3Provider, getToken } from "firebase/app-check"
+
+// Firestore is intentionally NOT imported here. It is heavy and only needed for saving and viewing
+// history, so src/lib/history.js loads "firebase/firestore" on demand with a dynamic import().
+// That keeps it out of the main bundle.
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -47,5 +50,4 @@ export async function getAppCheckToken() {
 }
 
 export const auth = getAuth(app)
-export const db = getFirestore(app)
 export const googleProvider = new GoogleAuthProvider()
