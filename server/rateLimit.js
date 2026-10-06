@@ -4,6 +4,8 @@
 //   2. per user, per minute      - stops rapid-fire / parallel bursts
 //   3. all users, per UTC day    - a hard cost ceiling for the whole app
 //
+// Plus a fourth counter that only limits REFUNDS (see refund() below).
+//
 // Storage: Upstash Redis over its REST API (no extra npm dependency). Serverless functions don't
 // share memory, so a real shared store is required for the limits to actually hold.
 // If the Upstash env vars are missing, a per-instance in-memory fallback is used. That is only
@@ -20,6 +22,10 @@ function intFromEnv(name, fallback) {
 const DAILY_LIMIT = intFromEnv("RATE_LIMIT_DAILY", 10) // per user, per UTC day
 const BURST_LIMIT = intFromEnv("RATE_LIMIT_BURST", 3) // per user, per BURST_WINDOW_SEC
 const GLOBAL_DAILY_LIMIT = intFromEnv("RATE_LIMIT_GLOBAL_DAILY", 500) // whole app, per UTC day
+// How many "ambiguous" failures (timeouts, cut-off or unreadable AI output) get refunded per user
+// per day. Clear provider-side failures (502/503/429 from Gemini) are always refunded and don't
+// count toward this. The cap exists so crafted input can't be used to farm free requests.
+const REFUND_CAP = intFromEnv("RATE_LIMIT_REFUND_CAP", 5)
 const BURST_WINDOW_SEC = 60
 const DAY_TTL_SEC = 25 * 60 * 60 // a little over a day so keys clean themselves up
 
@@ -110,6 +116,7 @@ function keysFor(uid, now) {
     user: `rl:day:${day}:${uid}`,
     burst: `rl:burst:${burstBucket}:${uid}`,
     global: `rl:global:${day}`,
+    refunds: `rl:refunds:${day}:${uid}`,
   }
 }
 
@@ -117,9 +124,14 @@ function keysFor(uid, now) {
 
 // Reserves one evaluation for this user.
 //
-// Allowed:  { allowed: true, remaining, limit, refund() }
-//           refund() gives the request back (call it when the AI provider failed and the user
-//           got nothing). It only touches the daily counters, never the burst counter.
+// Allowed:  { allowed: true, remaining, limit, refund({ capped }) }
+//           refund() gives the request back (call it when the request failed and the user got
+//           nothing). It only touches the daily counters, never the burst counter, and it only
+//           ever pays out once per reservation.
+//             refund({ capped: false })  clear provider-side failure: always refunded.
+//             refund({ capped: true })   ambiguous failure (timeout, cut-off / unreadable output):
+//                                        refunded only while the user is under REFUND_CAP for the day.
+//           Resolves to true if the request was refunded, false otherwise.
 // Denied:   { allowed: false, reason: "user_daily" | "user_burst" | "global_daily", retryAfterSeconds }
 //           A denied request does not consume anything, including the global budget.
 //
@@ -149,12 +161,26 @@ export async function consumeRequest(uid) {
     return { allowed: false, ...denied }
   }
 
+  let refunded = false
   return {
     allowed: true,
     remaining: Math.max(0, DAILY_LIMIT - userCount),
     limit: DAILY_LIMIT,
-    refund: () => store.decr([keys.user, keys.global]).catch(() => {}),
+    refund: async ({ capped = false } = {}) => {
+      if (refunded) return false
+      try {
+        if (capped) {
+          const [used] = await store.incr([{ key: keys.refunds, ttlSec: DAY_TTL_SEC }])
+          if (used > REFUND_CAP) return false
+        }
+        refunded = true
+        await store.decr([keys.user, keys.global])
+        return true
+      } catch {
+        return false // best effort: never let a refund problem break the error response
+      }
+    },
   }
 }
 
-export const RATE_LIMITS = { DAILY_LIMIT, BURST_LIMIT, GLOBAL_DAILY_LIMIT }
+export const RATE_LIMITS = { DAILY_LIMIT, BURST_LIMIT, GLOBAL_DAILY_LIMIT, REFUND_CAP }
