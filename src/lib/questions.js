@@ -1,9 +1,17 @@
+import { readStored, writeStored } from "./Storage"
+
 // A fixed local question bank, so picking questions costs no API call.
 // Each session guarantees a few role-specific and seniority-specific questions, then fills the
-// rest with general ones.
+// rest with general ones. Questions asked in recent sessions are pushed to the back of the line,
+// so repeat sessions feel fresh. Optional "custom" questions (generated from a job description)
+// take priority over the bank.
 
-const ROLE_QUOTA = 2 // role-specific questions guaranteed per session (when the role has them)
+const ROLE_QUOTA = 3 // role-specific questions guaranteed per session (when the role has them)
 const LEVEL_QUOTA = 1 // seniority-specific questions guaranteed per session
+const ROLE_QUOTA_WITH_CUSTOM = 1 // fewer bank questions when tailored ones are included
+
+const RECENT_KEY = "interview-ai-recent-questions"
+const RECENT_MAX = 60
 
 const GENERAL_QUESTIONS = [
   "Tell me about a recent project you're proud of and what made it challenging.",
@@ -14,6 +22,18 @@ const GENERAL_QUESTIONS = [
   "Describe a mistake you made at work and what you did about it.",
   "How do you handle feedback or review comments you disagree with?",
   "Tell me about a time you had to work with an unclear or changing set of requirements.",
+  "Tell me about a time you went above and beyond what was asked of you.",
+  "Describe a situation where you had to deliver bad news to a stakeholder or teammate.",
+  "Tell me about a time you missed a deadline. What happened and what did you change?",
+  "How do you stay organized when you're juggling several projects at once?",
+  "Describe a time you improved a process or workflow on your team.",
+  "Tell me about a time you had to influence someone without having direct authority.",
+  "What's the most useful piece of feedback you've ever received, and what did you do with it?",
+  "Tell me about a time you worked with someone whose style was very different from yours.",
+  "Describe a time you made a decision based on data that contradicted your gut feeling.",
+  "Why are you interested in this kind of role, and what do you hope to learn next?",
+  "Tell me about a time you had to take over work from someone else midway through.",
+  "How do you keep your skills current?",
 ]
 
 const SENIORITY_QUESTIONS = {
@@ -22,18 +42,27 @@ const SENIORITY_QUESTIONS = {
     "How do you decide when you've been stuck long enough to ask for help?",
     "Tell me about a time you got critical feedback early in your career. What did you change?",
     "What kind of environment and mentorship helps you grow the fastest?",
+    "Tell me about a team project where you had to rely on others to succeed.",
+    "What's something you taught yourself recently, and how did you go about it?",
+    "Describe a time you made a mistake while learning something new. What did you do next?",
   ],
   "Mid-level": [
     "Tell me about a time you owned a project from a vague idea all the way to delivery.",
     "Describe a time you had to push back on a deadline or scope. What was the outcome?",
     "How do you decide between polishing something and shipping it?",
     "Tell me about a time you helped a more junior teammate get unstuck.",
+    "Tell me about a time you inherited something messy, like a project, a process, or a backlog. How did you approach it?",
+    "How do you give feedback to a peer who is underperforming?",
+    "Describe a time you had to balance short-term delivery with long-term quality.",
   ],
   Senior: [
     "Tell me about a decision you made that affected multiple teams. How did you build buy-in?",
     "Describe a time you had to make a high-risk call with incomplete information.",
     "How do you mentor others and raise the bar for the team without becoming a bottleneck?",
     "Tell me about a project that failed or was cancelled. What did you learn, and what changed afterwards?",
+    "How do you decide what NOT to work on?",
+    "Tell me about a time you had to change a team's direction mid-project.",
+    "Describe how you've helped someone go from struggling to strong.",
   ],
 }
 
@@ -42,45 +71,112 @@ const ROLE_QUESTIONS = {
     "How do you approach making a UI accessible and performant at the same time?",
     "Tell me about a time you had to optimize a slow-rendering page or component.",
     "How do you decide between client-side and server-side rendering for a feature?",
+    "Explain how the browser turns HTML, CSS and JavaScript into pixels on the screen, and where that process can get slow.",
+    "How would you manage state in a large frontend application, and how do you decide what belongs in global state?",
+    "What causes unnecessary re-renders in a component-based framework, and how do you find and fix them?",
+    "How do you structure testing for a frontend feature? What do you unit test, and what do you leave to end-to-end tests?",
   ],
   "Backend Developer": [
     "How do you approach designing an API that other teams will depend on?",
     "Tell me about a time you had to debug a production performance issue.",
     "How do you think about data consistency when multiple services touch the same data?",
+    "Explain how database indexes work and when adding one can make things worse.",
+    "How would you design rate limiting for a public API?",
+    "What's your approach to retries and idempotency when calling an unreliable downstream service?",
+    "Walk me through how you'd safely roll out a database schema change on a live system.",
   ],
   "Full-Stack Developer": [
-    "How do you decide where a piece of logic should live — frontend, backend, or both?",
+    "How do you decide where a piece of logic should live: frontend, backend, or both?",
     "Tell me about a full feature you built end-to-end. What was the trickiest part?",
+    "How do you handle authentication and authorization across the frontend and backend of an app?",
+    "Walk me through what happens from the moment a user clicks submit on a form to the moment they see the result.",
+    "How do you model data so that both the API and the UI stay simple?",
+    "Tell me about a bug that crossed the frontend and backend boundary. How did you track it down?",
+    "How do you approach caching across the whole stack?",
   ],
   "Mobile Developer": [
     "How do you approach handling poor or intermittent network conditions in an app?",
     "Tell me about a time you had to optimize battery or memory usage.",
+    "How do you handle app state and navigation when the OS kills your app in the background?",
+    "What are the trade-offs between native and cross-platform development?",
+    "How do you approach releasing and rolling back a mobile app, given app store review delays?",
+    "How do you design offline-first features and resolve sync conflicts?",
+    "How do you profile and fix jank or slow startup in a mobile app?",
   ],
   "DevOps Engineer": [
     "Walk me through how you'd respond to a production outage at 2am.",
     "How do you approach balancing deployment speed with system stability?",
+    "Explain the difference between blue-green and canary deployments, and when you'd pick each.",
+    "How do you decide what to alert on, and how do you avoid alert fatigue?",
+    "Walk me through how you'd design a CI/CD pipeline for a team shipping several times a day.",
+    "How do you manage secrets and configuration across environments?",
+    "Tell me about an incident you were part of. How did the postmortem go?",
   ],
   "Data Analyst / Data Scientist": [
     "Tell me about a time your analysis changed a decision someone was about to make.",
     "How do you sanity-check a result that looks surprisingly good?",
+    "How would you explain the difference between correlation and causation to a non-technical stakeholder?",
+    "Walk me through how you'd design and read an A/B test.",
+    "How do you handle missing or messy data before analysis?",
+    "What metrics would you use to evaluate a classification model, and when is accuracy misleading?",
+    "Tell me about a time you had to communicate an uncertain result to leadership.",
   ],
   "QA / Test Engineer": [
     "How do you decide what to automate versus test manually?",
     "Tell me about a bug that was especially hard to track down.",
+    "How would you design a test strategy for a new feature with a tight deadline?",
+    "What makes a test flaky, and how do you deal with flaky tests?",
+    "How do you decide when a product is ready to release?",
+    "How do you approach testing an API versus testing a UI?",
+    "How do you work with developers who disagree that something is a bug?",
   ],
   "Tech Support / IT Support": [
     "Tell me about a time you had to explain a technical issue to a frustrated, non-technical user.",
     "How do you triage when you have multiple urgent tickets at once?",
+    "Walk me through how you'd troubleshoot a user who says the internet is down.",
+    "How do you document a solution so the next person can resolve the same issue faster?",
+    "Tell me about a time you couldn't solve a problem on your own. How did you escalate?",
+    "How do you decide when a recurring issue needs a permanent fix instead of a quick workaround?",
+    "How would you explain how a VPN works to someone non-technical?",
   ],
   "Product Manager": [
     "Tell me about a time you had to say no to a feature request. How did you handle it?",
     "How do you decide what to prioritize when engineering time is limited?",
+    "How do you define and measure success for a new feature?",
+    "Walk me through how you'd build a roadmap with competing stakeholder requests.",
+    "Tell me about a product decision you got wrong. What did you learn?",
+    "How do you decide whether to build, buy, or partner?",
+    "How would you run discovery before committing to a big feature?",
   ],
   "UI/UX Designer": [
     "Tell me about a time user feedback completely changed your design direction.",
     "How do you balance what users ask for with what they actually need?",
+    "Walk me through your design process from problem statement to handoff.",
+    "How do you decide when to run usability testing, and what do you do with the results?",
+    "How do you design for accessibility from the start?",
+    "Tell me about a time you had to defend a design decision to a skeptical stakeholder.",
+    "How would you measure whether a redesign actually improved the experience?",
   ],
 }
+
+// ---------- recently asked questions ----------
+
+// Oldest first, newest last.
+export function getRecentQuestions() {
+  try {
+    const parsed = JSON.parse(readStored(RECENT_KEY, "[]"))
+    return Array.isArray(parsed) ? parsed.filter((q) => typeof q === "string") : []
+  } catch {
+    return []
+  }
+}
+
+export function rememberQuestions(questions) {
+  const recent = getRecentQuestions().filter((q) => !questions.includes(q))
+  writeStored(RECENT_KEY, JSON.stringify([...recent, ...questions].slice(-RECENT_MAX)))
+}
+
+// ---------- picking ----------
 
 // Fisher-Yates shuffle, doesn't mutate the input array.
 function shuffle(arr) {
@@ -92,13 +188,23 @@ function shuffle(arr) {
   return copy
 }
 
-// Builds a `count`-length list: ROLE_QUOTA role-specific + LEVEL_QUOTA seniority-specific questions
-// are always included (when the bank has them), general questions fill the rest, and anything
-// still missing is padded from the leftover role/seniority questions. The final order is shuffled.
-export function pickQuestions(role, seniority, count) {
-  const roleQs = shuffle(ROLE_QUESTIONS[role] || [])
-  const levelQs = shuffle(SENIORITY_QUESTIONS[seniority] || [])
-  const general = shuffle(GENERAL_QUESTIONS)
+// Shuffled, then sorted so never-asked questions come first, followed by the ones asked longest ago.
+function orderByFreshness(pool, recent) {
+  return shuffle(pool)
+    .map((q) => ({ q, rank: recent.lastIndexOf(q) })) // -1 = never asked
+    .sort((a, b) => a.rank - b.rank)
+    .map((item) => item.q)
+}
+
+// Builds a `count`-length list. Custom (job-description) questions go in first, then
+// role-specific and seniority-specific bank questions, then general ones. Within every pool,
+// questions that haven't been asked recently win. The final order is shuffled.
+//   options.recent  questions asked in earlier sessions (oldest first)
+//   options.custom  extra questions that should always be included
+export function pickQuestions(role, seniority, count, { recent = [], custom = [] } = {}) {
+  const roleQs = orderByFreshness(ROLE_QUESTIONS[role] || [], recent)
+  const levelQs = orderByFreshness(SENIORITY_QUESTIONS[seniority] || [], recent)
+  const general = orderByFreshness(GENERAL_QUESTIONS, recent)
 
   const picked = []
   const seen = new Set()
@@ -108,7 +214,8 @@ export function pickQuestions(role, seniority, count) {
     picked.push(q)
   }
 
-  roleQs.slice(0, ROLE_QUOTA).forEach(add)
+  custom.forEach(add)
+  roleQs.slice(0, custom.length ? ROLE_QUOTA_WITH_CUSTOM : ROLE_QUOTA).forEach(add)
   levelQs.slice(0, LEVEL_QUOTA).forEach(add)
   general.forEach(add)
   ;[...roleQs, ...levelQs].forEach(add)

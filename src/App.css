@@ -437,3 +437,122 @@
   background: rgba(170, 59, 255, 0.08);
   border: 1px solid rgba(170, 59, 255, 0.22);
 }
+
+/* ---------- Quota meter ---------- */
+
+.quota-meter { margin: 0; text-align: left; }
+.quota-meter--muted { font-size: 12.5px; color: #9a9aa5; }
+.quota-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.quota-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #aa3bff, #7c3aed);
+  transition: width 0.3s ease;
+}
+.quota-text { margin: 6px 0 0; font-size: 12.5px; color: #b8b8c2; }
+.quota-meter--empty .quota-bar-fill { background: #ff8a8a; }
+.quota-meter--empty .quota-text { color: #f5c98a; }
+
+.link-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #c084fc;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.mode-switch:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ---------- Job description input ---------- */
+
+.jd-input {
+  text-align: left;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 12px 14px;
+}
+.jd-input summary { cursor: pointer; font-size: 14px; font-weight: 600; color: #f0f0f2; }
+.jd-optional { font-weight: 400; color: #8a8a94; }
+.jd-input textarea {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #1a1b22;
+  color: #f0f0f2;
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.jd-input textarea:focus { outline: none; border-color: #c084fc; }
+.jd-input textarea:disabled { opacity: 0.5; cursor: not-allowed; }
+.jd-count { color: #74747f; }
+
+/* ---------- Retry card ---------- */
+
+.retry-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 1.5rem;
+  padding: 1rem 1.25rem;
+  border-radius: 14px;
+  text-align: left;
+  background: rgba(170, 59, 255, 0.08);
+  border: 1px solid rgba(170, 59, 255, 0.28);
+}
+.retry-title { margin: 0 0 4px; font-weight: 650; color: #f0f0f2; font-size: 15px; }
+.retry-sub { margin: 0; font-size: 13px; line-height: 1.45; color: #b8b8c2; }
+.retry-card .primary-btn { margin-top: 0; flex-shrink: 0; }
+
+@media (max-width: 520px) {
+  .retry-card { flex-direction: column; align-items: stretch; }
+}
+
+.retry-compare {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.14);
+}
+.retry-compare-head { margin: 0 0 8px; font-size: 14px; color: #d0d0d5; }
+.retry-compare-note { margin: 0 0 8px; font-size: 12.5px; color: #f5c98a; }
+.retry-delta { font-weight: 700; margin-left: 4px; }
+.retry-delta--up { color: #6fdc9f; }
+.retry-delta--down { color: #ff8a8a; }
+.retry-delta--same { color: #9a9aa5; }
+
+/* ---------- STAR + sample answer ---------- */
+
+.star-block { margin: 0 0 10px; }
+.star-row { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 6px; padding: 0; }
+.star-pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  border: 1px solid transparent;
+}
+.star-pill--yes { color: #6fdc9f; background: rgba(52, 199, 119, 0.1); border-color: rgba(52, 199, 119, 0.3); }
+.star-pill--no { color: #ffb3b3; background: rgba(255, 80, 80, 0.08); border-color: rgba(255, 80, 80, 0.25); }
+.star-missing { margin: 0; font-size: 12.5px; color: #f5c98a; }
+
+.strong-answer {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.strong-answer summary { cursor: pointer; font-size: 13.5px; font-weight: 600; color: #c084fc; }
+.strong-answer p { margin: 10px 0 0; font-size: 14px; line-height: 1.55; color: #d0d0d5; }

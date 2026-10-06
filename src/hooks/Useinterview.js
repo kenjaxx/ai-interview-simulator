@@ -1,11 +1,12 @@
-import { useState, useCallback, useRef, useEffect } from "react"
+import { useState, useCallback, useRef, useEffect, useMemo } from "react"
 import { useSpeechRecognition } from "./useSpeechRecognition"
 import { useTextToSpeech } from "./useTextToSpeech"
 import { useAudioLevel } from "./useAudioLevel"
 import { useMicPermission } from "./useMicPermission"
-import { evaluateSession } from "../lib/gemini"
-import { pickQuestions } from "../lib/questions"
+import { evaluateSession, fetchUsage, generateQuestions } from "../lib/gemini"
+import { pickQuestions, getRecentQuestions, rememberQuestions } from "../lib/questions"
 import { countFillers } from "../lib/fillers"
+import { findWeakestIndex } from "../lib/scores"
 import { getSupport, voiceAvailable } from "../lib/support"
 import { newSessionId, saveSession } from "../lib/history"
 import { ROLES } from "../lib/Options"
@@ -13,10 +14,15 @@ import { readStored, writeStored } from "../lib/Storage"
 import { messageForError } from "../lib/errorMessages"
 
 export const QUESTION_COUNT = 6
+// Job-description questions. Keep MIN/MAX in step with api/evaluate.js.
+export const JD_QUESTION_COUNT = 3
+export const MIN_JD_CHARS = 40
+export const MAX_JD_CHARS = 4000
 const MODE_STORAGE_KEY = "interview-ai-mode"
 
 // Owns everything about running an interview: setup choices, speech in/out, the question loop,
-// scoring and saving. App.jsx and the screen components only render what this returns.
+// scoring, retrying a weak answer, the AI quota meter, and saving. App.jsx and the screen
+// components only render what this returns.
 //
 // Returns { screen, setScreen, setup, interview, summary }.
 export function useInterview({ user, authLoading }) {
@@ -29,6 +35,13 @@ export function useInterview({ user, authLoading }) {
   // What the user picked on the setup screen. The mode actually used also depends on browser support.
   const [inputPref, setInputPref] = useState("voice")
   const [notice, setNotice] = useState(null)
+  const [jobDescription, setJobDescription] = useState("")
+  const [starting, setStarting] = useState(false) // true while tailored questions are being generated
+  const [sessionNote, setSessionNote] = useState(null) // shown during the interview (e.g. "3 questions are tailored...")
+
+  // { remaining, limit, globalExhausted } from the server, or null while unknown.
+  const [quota, setQuota] = useState(null)
+  const [quotaStatus, setQuotaStatus] = useState("idle") // "idle" | "loading" | "ready" | "error"
 
   const [orbState, setOrbState] = useState("idle") // "idle" | "listening" | "thinking" | "speaking"
   const [currentQuestion, setCurrentQuestion] = useState("")
@@ -40,12 +53,17 @@ export function useInterview({ user, authLoading }) {
   const [overallSummary, setOverallSummary] = useState("")
   const [saveStatus, setSaveStatus] = useState("idle") // "idle" | "saving" | "saved" | "error"
   const [error, setError] = useState(null)
+  // True while a score is being computed (the whole interview, or a retried answer).
   const [awaitingFinalScore, setAwaitingFinalScore] = useState(false)
   // { remaining, limit } from the last Full AI evaluation, or null (Practice Mode / not yet scored).
   const [usage, setUsage] = useState(null)
   // Locked in when the interview starts, so toggling the switch mid-interview
   // never changes how the session already in progress gets scored.
   const [sessionMode, setSessionMode] = useState("practice")
+
+  // Retry flow: which answer (by index) is being re-answered, and the results so far.
+  const [retryIndex, setRetryIndex] = useState(null)
+  const [retryResults, setRetryResults] = useState({}) // index -> { answer, inputMethod, metrics, evaluation, mode }
 
   const promptShownAtRef = useRef(null)
   const questionsRef = useRef([])
@@ -60,9 +78,15 @@ export function useInterview({ user, authLoading }) {
   // Bumped whenever an interview starts or is torn down, so late async results
   // (e.g. a scoring response arriving after sign-out) can be recognized as stale and dropped.
   const interviewIdRef = useRef(0)
-  // Always points at the latest handleAnswer. Speech callbacks call through this ref, which
-  // breaks the presentQuestion <-> handleAnswer dependency cycle without stale closures.
-  const handleAnswerRef = useRef(() => {})
+  // Same idea for the retry flow: bumped when a retry starts or is cancelled.
+  const retryRunRef = useRef(0)
+  const retryIndexRef = useRef(null)
+  const retryAttemptRef = useRef(null) // { question, answer, metrics, inputMethod } waiting to be scored
+  const retryModeRef = useRef("practice") // "practice" | "full" for the retry in progress
+  // Always points at the right answer handler (main flow or retry flow). Speech callbacks call
+  // through this ref, which breaks the presentQuestion <-> handleAnswer dependency cycle without
+  // stale closures.
+  const answerRouterRef = useRef(() => {})
 
   const [support] = useState(getSupport)
   const mic = useMicPermission()
@@ -81,6 +105,39 @@ export function useInterview({ user, authLoading }) {
   // The mic stream is opened once per interview (acquireMic is idempotent) and released at the end.
   // getLevel is polled by the Orb directly, so mic volume never causes a re-render.
   const { getLevel, acquireMic, releaseMic } = useAudioLevel()
+
+  // ---------- quota ----------
+
+  // Full AI is blocked only when the server says so. While the quota is unknown (loading, failed),
+  // Full AI stays available and the server enforces the limit anyway.
+  const quotaExhausted = !!quota && (quota.remaining <= 0 || quota.globalExhausted)
+  // The stored preference is kept as-is, but the mode actually used drops to Practice while exhausted.
+  const effectiveMode = aiMode === "full" && !quotaExhausted ? "full" : "practice"
+  // Tailored questions cost one evaluation and scoring needs another, so require two.
+  const jdAvailable = effectiveMode === "full" && (!quota || quota.remaining >= 2)
+
+  const applyUsage = useCallback((info) => {
+    if (!info) return
+    setQuota({ remaining: info.remaining, limit: info.limit, globalExhausted: false })
+  }, [])
+
+  const refreshQuota = useCallback(async () => {
+    if (!uid) return
+    setQuotaStatus("loading")
+    try {
+      const latest = await fetchUsage()
+      if (latest) setQuota(latest)
+      setQuotaStatus("ready")
+    } catch (err) {
+      console.error("Couldn't load AI quota:", err)
+      setQuotaStatus("error")
+    }
+  }, [uid])
+
+  // Refresh whenever the setup screen is shown (first load, and after finishing an interview).
+  useEffect(() => {
+    if (uid && screen === "setup") refreshQuota()
+  }, [uid, screen, refreshQuota])
 
   useEffect(() => {
     writeStored(MODE_STORAGE_KEY, aiMode)
@@ -136,7 +193,7 @@ export function useInterview({ user, authLoading }) {
     setOrbState("listening")
     startListening({
       promptShownAt: promptShownAtRef.current,
-      onFinal: (answerText, metrics) => handleAnswerRef.current(answerText, metrics, "voice"),
+      onFinal: (answerText, metrics) => answerRouterRef.current(answerText, metrics, "voice"),
       onEmpty: handleEmptyAnswer,
       onError: handleListenError,
     })
@@ -161,6 +218,7 @@ export function useInterview({ user, authLoading }) {
   // Tears everything down: speech, recognition, mic stream, and any in-flight scoring.
   const restart = useCallback(() => {
     interviewIdRef.current++
+    retryRunRef.current++
     stopSpeaking()
     stopListening()
     releaseMic()
@@ -169,6 +227,10 @@ export function useInterview({ user, authLoading }) {
     questionsRef.current = []
     questionIndexRef.current = 0
     pendingSaveRef.current = null
+    retryIndexRef.current = null
+    retryAttemptRef.current = null
+    setRetryIndex(null)
+    setRetryResults({})
     setQuestionIndex(0)
     setAnsweredCount(0)
     setSession([])
@@ -180,6 +242,8 @@ export function useInterview({ user, authLoading }) {
     setOrbState("idle")
     setError(null)
     setNotice(null)
+    setSessionNote(null)
+    setStarting(false)
     setAwaitingFinalScore(false)
   }, [stopSpeaking, stopListening, releaseMic])
 
@@ -222,6 +286,7 @@ export function useInterview({ user, authLoading }) {
       setSession(finalSession)
       setOverallSummary(summaryText || "")
       setUsage(mode === "full" ? usageInfo : null)
+      if (mode === "full") applyUsage(usageInfo)
       setScreen("summary")
       setOrbState("idle")
       setAwaitingFinalScore(false)
@@ -236,7 +301,7 @@ export function useInterview({ user, authLoading }) {
       setError(messageForError(err))
       setOrbState("idle")
     }
-  }, [releaseMic, queueSave])
+  }, [releaseMic, queueSave, applyUsage])
 
   // Called when the last question is done, or the user ends early.
   const finishInterview = useCallback(() => {
@@ -273,23 +338,167 @@ export function useInterview({ user, authLoading }) {
     advance()
   }, [advance])
 
-  useEffect(() => {
-    handleAnswerRef.current = handleAnswer
-  }, [handleAnswer])
+  // ---------- retrying the weakest answer ----------
 
-  const startInterview = () => {
-    interviewIdRef.current++
-    sessionConfigRef.current = { role, seniority, mode: aiMode }
+  // Scores the re-answered question on its own. The original session (and its saved history entry)
+  // is left untouched: the retry result is shown next to it for comparison.
+  const runRetryScoring = useCallback(async (forceMode) => {
+    const index = retryIndexRef.current
+    const attempt = retryAttemptRef.current
+    if (index === null || !attempt) return
+
+    const runId = retryRunRef.current
+    const interviewId = interviewIdRef.current
+    const config = sessionConfigRef.current
+    const mode = forceMode || retryModeRef.current
+    if (forceMode) retryModeRef.current = forceMode
+
+    releaseMic()
+    setAwaitingFinalScore(true)
+    setOrbState("thinking")
+    setError(null)
+
+    try {
+      const { evaluations, usage: usageInfo } = await evaluateSession({
+        role: config.role,
+        seniority: config.seniority,
+        qas: [attempt],
+        mock: mode === "practice",
+      })
+
+      if (interviewIdRef.current !== interviewId || retryRunRef.current !== runId) return
+
+      if (mode === "full") applyUsage(usageInfo)
+      setRetryResults((prev) => ({
+        ...prev,
+        [index]: {
+          answer: attempt.answer,
+          inputMethod: attempt.inputMethod,
+          metrics: attempt.metrics,
+          evaluation: evaluations[0],
+          mode,
+        },
+      }))
+      retryIndexRef.current = null
+      retryAttemptRef.current = null
+      setRetryIndex(null)
+      setAwaitingFinalScore(false)
+      setOrbState("idle")
+      setScreen("summary")
+    } catch (err) {
+      if (interviewIdRef.current !== interviewId || retryRunRef.current !== runId) return
+      console.error("Failed to score the retry:", err)
+      setError(messageForError(err))
+      setOrbState("idle")
+    }
+  }, [releaseMic, applyUsage])
+
+  const handleRetryAnswer = useCallback((answerText, metrics, inputMethod = "voice") => {
+    setError(null)
+    retryAttemptRef.current = { question: currentQuestionRef.current, answer: answerText, metrics, inputMethod }
+    runRetryScoring()
+  }, [runRetryScoring])
+
+  useEffect(() => {
+    answerRouterRef.current = (answerText, metrics, inputMethod) => {
+      if (retryIndexRef.current !== null) handleRetryAnswer(answerText, metrics, inputMethod)
+      else handleAnswer(answerText, metrics, inputMethod)
+    }
+  }, [handleAnswer, handleRetryAnswer])
+
+  const startRetry = (index) => {
+    const qa = qasRef.current[index]
+    if (!qa) return
+
+    const baseMode = sessionConfigRef.current.mode
+    // If the AI quota ran out since the interview, score the retry locally instead of failing.
+    retryModeRef.current = baseMode === "full" && quotaExhausted ? "practice" : baseMode
+
+    retryRunRef.current++
+    retryIndexRef.current = index
+    retryAttemptRef.current = null
+    inputModeRef.current = setupMode
+
+    setRetryIndex(index)
+    setInputMode(setupMode)
+    setAwaitingFinalScore(false)
+    setError(null)
+    setScreen("interview")
+
+    presentQuestion(qa.question)
+  }
+
+  const cancelRetry = () => {
+    retryRunRef.current++
+    stopSpeaking()
+    stopListening()
+    releaseMic()
+    retryIndexRef.current = null
+    retryAttemptRef.current = null
+    setRetryIndex(null)
+    setAwaitingFinalScore(false)
+    setOrbState("idle")
+    setError(null)
+    setScreen("summary")
+  }
+
+  // ---------- starting an interview ----------
+
+  const startInterview = async () => {
+    if (starting) return
+
+    // Capture the setup choices now: the user could touch the form while questions are generated.
+    const mode = effectiveMode
+    const chosenRole = role
+    const chosenSeniority = seniority
+    const jd = jobDescription.trim()
+    const useJd = jdAvailable && jd.length >= MIN_JD_CHARS
+
+    const interviewId = ++interviewIdRef.current
+    setNotice(null)
+
+    let custom = []
+    let note = null
+    if (useJd) {
+      setStarting(true)
+      try {
+        const result = await generateQuestions({
+          role: chosenRole,
+          seniority: chosenSeniority,
+          jobDescription: jd,
+          count: JD_QUESTION_COUNT,
+        })
+        custom = result.questions
+        applyUsage(result.usage)
+        note = `${custom.length} of these questions are tailored to the job description you pasted.`
+      } catch (err) {
+        console.error("Couldn't generate tailored questions:", err)
+        note = "Couldn't generate job-specific questions, so a standard set was used."
+      } finally {
+        setStarting(false)
+      }
+      // The user signed out or restarted while we were waiting.
+      if (interviewIdRef.current !== interviewId) return
+    }
+
+    sessionConfigRef.current = { role: chosenRole, seniority: chosenSeniority, mode }
     inputModeRef.current = setupMode
     qasRef.current = []
     pendingSaveRef.current = null
+    retryIndexRef.current = null
+    retryAttemptRef.current = null
+    retryRunRef.current++
 
-    const questions = pickQuestions(role, seniority, QUESTION_COUNT)
+    const questions = pickQuestions(chosenRole, chosenSeniority, QUESTION_COUNT, {
+      recent: getRecentQuestions(),
+      custom,
+    })
+    rememberQuestions(questions.filter((q) => !custom.includes(q)))
     questionsRef.current = questions
     questionIndexRef.current = 0
 
     setInputMode(setupMode)
-    setSessionMode(aiMode)
+    setSessionMode(mode)
     setQuestionIndex(0)
     setQuestionTotal(questions.length)
     setAnsweredCount(0)
@@ -297,8 +506,11 @@ export function useInterview({ user, authLoading }) {
     setOverallSummary("")
     setUsage(null)
     setSaveStatus("idle")
+    setRetryIndex(null)
+    setRetryResults({})
     setError(null)
     setNotice(null)
+    setSessionNote(note)
     setAwaitingFinalScore(false)
     setScreen("interview")
 
@@ -310,7 +522,8 @@ export function useInterview({ user, authLoading }) {
   const retry = () => {
     setError(null)
     if (awaitingFinalScore) {
-      runFinalScoring()
+      if (retryIndexRef.current !== null) runRetryScoring()
+      else runFinalScoring()
     } else {
       presentQuestion(currentQuestionRef.current)
     }
@@ -369,18 +582,31 @@ export function useInterview({ user, authLoading }) {
     if (!text) return
     stopSpeaking()
     // Typed answers have no pace or response delay, so those are left at 0 and flagged via inputMethod.
-    handleAnswer(text, { wpm: 0, fillerCount: countFillers(text), responseDelaySec: 0 }, "text")
+    answerRouterRef.current(text, { wpm: 0, fillerCount: countFillers(text), responseDelaySec: 0 }, "text")
   }
 
-  const scoreWithPractice = () => runFinalScoring("practice")
+  const scoreWithPractice = () => {
+    if (retryIndexRef.current !== null) runRetryScoring("practice")
+    else runFinalScoring("practice")
+  }
 
   const retrySave = () => runSave(interviewIdRef.current)
 
   // If the user signs out mid-interview, App stays mounted, so the question would keep being read
   // aloud and the mic would start listening behind the login screen. Tear everything down instead.
   useEffect(() => {
-    if (!authLoading && !user) restart()
+    if (!authLoading && !user) {
+      restart()
+      setQuota(null)
+      setQuotaStatus("idle")
+    }
   }, [user, authLoading, restart])
+
+  // The weakest answer that hasn't been retried yet (-1 when there's nothing left to retry).
+  const weakestIndex = useMemo(
+    () => findWeakestIndex(session, new Set(Object.keys(retryResults).map(Number))),
+    [session, retryResults]
+  )
 
   return {
     screen,
@@ -391,8 +617,16 @@ export function useInterview({ user, authLoading }) {
       setRole,
       seniority,
       setSeniority,
-      aiMode,
+      aiMode: effectiveMode,
       setAiMode,
+      quota,
+      quotaStatus,
+      quotaExhausted,
+      refreshQuota,
+      jobDescription,
+      setJobDescription,
+      jdAvailable,
+      starting,
       setupMode,
       setInputPref,
       support,
@@ -412,6 +646,9 @@ export function useInterview({ user, authLoading }) {
       error,
       awaitingFinalScore,
       sessionMode,
+      sessionNote,
+      isRetry: retryIndex !== null,
+      retryQuestionNumber: retryIndex !== null ? retryIndex + 1 : null,
       voiceOk,
       ttsSupported,
       isListening,
@@ -426,6 +663,7 @@ export function useInterview({ user, authLoading }) {
       reRecord,
       skip,
       endEarly,
+      cancelRetry,
       switchToText,
       switchToVoice,
       scoreWithPractice,
@@ -439,6 +677,10 @@ export function useInterview({ user, authLoading }) {
       saveStatus,
       retrySave,
       restart,
+      retryResults,
+      weakestIndex,
+      startRetry,
+      retryUsesAi: sessionMode === "full" && !quotaExhausted,
     },
   }
 }

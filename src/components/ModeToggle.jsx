@@ -1,7 +1,8 @@
 import "./ModeToggle.css"
 
 // mode: "practice" | "full"
-export default function ModeToggle({ mode, onChange }) {
+// disabled: locks the switch (e.g. the AI quota is used up); disabledReason replaces the subtitle.
+export default function ModeToggle({ mode, onChange, disabled = false, disabledReason = "" }) {
   const isFull = mode === "full"
 
   return (
@@ -11,9 +12,11 @@ export default function ModeToggle({ mode, onChange }) {
           {isFull ? "Full AI Mode" : "Practice Mode"}
         </p>
         <p className="mode-toggle-sub">
-          {isFull
-            ? "Real Gemini feedback based on what you actually said. Uses one of your daily AI requests."
-            : "Instant local scoring, unlimited runs — no AI request used."}
+          {disabled && disabledReason
+            ? disabledReason
+            : isFull
+              ? "Real Gemini feedback, STAR checks and sample answers. Uses one of your daily AI requests."
+              : "Instant local scoring, unlimited runs — no AI request used."}
         </p>
       </div>
       <button
@@ -21,6 +24,7 @@ export default function ModeToggle({ mode, onChange }) {
         role="switch"
         aria-checked={isFull}
         aria-label="Toggle Full AI Mode"
+        disabled={disabled}
         className={`mode-switch ${isFull ? "mode-switch--on" : ""}`}
         onClick={() => onChange(isFull ? "practice" : "full")}
       >

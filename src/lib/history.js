@@ -56,12 +56,22 @@ export async function saveSession(uid, sessionId, { role, seniority, mode, overa
       fillerCount: entry.metrics?.fillerCount ?? 0,
       responseDelaySec: entry.metrics?.responseDelaySec ?? 0,
     },
-    evaluation: {
+        evaluation: {
       contentScore: entry.evaluation.contentScore,
       clarityScore: entry.evaluation.clarityScore,
       confidenceScore: entry.evaluation.confidenceScore,
       feedback: entry.evaluation.feedback || "",
       improvementTip: entry.evaluation.improvementTip || "",
+      // Firestore rejects `undefined`, and the rules want exactly these four booleans or null.
+      star: entry.evaluation.star
+        ? {
+            situation: !!entry.evaluation.star.situation,
+            task: !!entry.evaluation.star.task,
+            action: !!entry.evaluation.star.action,
+            result: !!entry.evaluation.star.result,
+          }
+        : null,
+      strongAnswer: entry.evaluation.strongAnswer || "",
     },
   }))
 

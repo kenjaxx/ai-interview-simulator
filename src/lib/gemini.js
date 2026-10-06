@@ -27,7 +27,8 @@ const REQUEST_TIMEOUT_MS = 60_000
 
 // ---------- Backend call (Vercel serverless function) ----------
 
-async function callBackend(payload) {
+// isValid(body) checks the response has the shape the caller expects.
+async function callBackend(payload, isValid) {
   const user = auth.currentUser
   if (!user) throw new GeminiApiError("You must be signed in.", { status: 401 })
 
@@ -79,7 +80,7 @@ async function callBackend(payload) {
     throw new GeminiApiError(body?.error || "Couldn't reach the interviewer AI.", { status: res.status })
   }
 
-  if (!body || !Array.isArray(body.evaluations)) {
+  if (!body || !isValid(body)) {
     throw new GeminiApiError("The server returned an unexpected response.", { status: res.status })
   }
 
@@ -154,12 +155,15 @@ function mockEvaluation(answer = "", metrics = {}, inputMethod = "voice") {
     confidenceScore,
     feedback: feedbackByArea[weakest],
     improvementTip: tipByArea[weakest],
+    // STAR analysis and sample answers need real AI, so Practice Mode leaves them empty.
+    star: null,
+    strongAnswer: "",
   }
 }
 
 // ---------- Public API ----------
 
-// Called ONCE per interview with every question/answer/metrics triple.
+// Scores a set of Q&As in one call: a whole interview, or a single retried answer.
 // Practice Mode is scored locally; Full AI Mode goes through /api/evaluate,
 // which verifies the Firebase login (and App Check), enforces usage limits, and holds the Gemini key server-side.
 //
@@ -178,22 +182,57 @@ export async function evaluateSession({ role, seniority, qas, mock = false }) {
     }
   }
 
-  const body = await callBackend({
-    role,
-    seniority,
-    // inputMethod must be sent, otherwise the server assumes "voice" and judges
-    // typed answers against pace/delay metrics that don't exist for them.
-    qas: qas.map(({ question, answer, metrics, inputMethod }) => ({
-      question,
-      answer,
-      metrics,
-      inputMethod: inputMethod === "text" ? "text" : "voice",
-    })),
-  })
+  const body = await callBackend(
+    {
+      role,
+      seniority,
+      // inputMethod must be sent, otherwise the server assumes "voice" and judges
+      // typed answers against pace/delay metrics that don't exist for them.
+      qas: qas.map(({ question, answer, metrics, inputMethod }) => ({
+        question,
+        answer,
+        metrics,
+        inputMethod: inputMethod === "text" ? "text" : "voice",
+      })),
+    },
+    (b) => Array.isArray(b.evaluations)
+  )
 
   return {
-    evaluations: body.evaluations,
+    evaluations: body.evaluations.map((e) => ({
+      ...e,
+      star: e.star ?? null,
+      strongAnswer: e.strongAnswer ?? "",
+    })),
     overallSummary: body.overallSummary || "",
     usage: body.usage ?? null,
   }
+}
+
+// How many AI evaluations are left today. Spends nothing.
+// Returns { remaining, limit, globalExhausted }, or null in mock mode.
+export async function fetchUsage() {
+  if (MOCK_MODE) return null
+  const body = await callBackend(
+    { action: "usage" },
+    (b) => typeof b?.usage?.remaining === "number" && typeof b?.usage?.limit === "number"
+  )
+  return body.usage
+}
+
+// Asks Gemini for interview questions tailored to a pasted job description. Costs one AI evaluation.
+// Returns { questions: string[], usage }.
+export async function generateQuestions({ role, seniority, jobDescription, count }) {
+  if (MOCK_MODE) {
+    await mockDelay()
+    return {
+      questions: Array.from({ length: count }, (_, i) => `(Mock) Tailored question ${i + 1} for a ${seniority} ${role}.`),
+      usage: null,
+    }
+  }
+  const body = await callBackend(
+    { action: "questions", role, seniority, jobDescription, count },
+    (b) => Array.isArray(b.questions)
+  )
+  return { questions: body.questions, usage: body.usage ?? null }
 }

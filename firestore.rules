@@ -30,15 +30,27 @@ service cloud.firestore {
         && m.responseDelaySec is number && m.responseDelaySec >= 0 && m.responseDelaySec <= 600;
     }
 
+        function validStar(s) {
+      return s is map
+        && s.keys().hasOnly(['situation', 'task', 'action', 'result'])
+        && s.keys().hasAll(['situation', 'task', 'action', 'result'])
+        && s.situation is bool
+        && s.task is bool
+        && s.action is bool
+        && s.result is bool;
+    }
+
     function validEvaluation(e) {
       return e is map
-        && e.keys().hasOnly(['contentScore', 'clarityScore', 'confidenceScore', 'feedback', 'improvementTip'])
-        && e.keys().hasAll(['contentScore', 'clarityScore', 'confidenceScore', 'feedback', 'improvementTip'])
+        && e.keys().hasOnly(['contentScore', 'clarityScore', 'confidenceScore', 'feedback', 'improvementTip', 'star', 'strongAnswer'])
+        && e.keys().hasAll(['contentScore', 'clarityScore', 'confidenceScore', 'feedback', 'improvementTip', 'star', 'strongAnswer'])
         && isScore(e.contentScore)
         && isScore(e.clarityScore)
         && isScore(e.confidenceScore)
         && e.feedback is string && e.feedback.size() <= 1000
-        && e.improvementTip is string && e.improvementTip.size() <= 500;
+        && e.improvementTip is string && e.improvementTip.size() <= 500
+        && (e.star == null || validStar(e.star))
+        && e.strongAnswer is string && e.strongAnswer.size() <= 1500;
     }
 
     function validQa(q) {

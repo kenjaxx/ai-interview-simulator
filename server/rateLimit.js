@@ -60,6 +60,11 @@ const redisStore = {
   async decr(keys) {
     await redisPipeline(keys.map((key) => ["DECR", key]))
   },
+  // Read-only: current counts without incrementing anything.
+  async get(keys) {
+    const results = await redisPipeline(keys.map((key) => ["GET", key]))
+    return results.map((value) => Number(value) || 0)
+  },
 }
 
 const memory = new Map()
@@ -76,11 +81,18 @@ const memoryStore = {
       return entry.count
     })
   },
-  async decr(keys) {
+    async decr(keys) {
     for (const key of keys) {
       const entry = memory.get(key)
       if (entry && entry.count > 0) entry.count--
     }
+  },
+  async get(keys) {
+    const now = Date.now()
+    return keys.map((key) => {
+      const entry = memory.get(key)
+      return entry && entry.expiresAt > now ? entry.count : 0
+    })
   },
 }
 
@@ -182,5 +194,17 @@ export async function consumeRequest(uid) {
     },
   }
 }
-
+// Reports how many evaluations a user has left WITHOUT spending one. Used by the setup screen's
+// quota meter. Throws if the storage backend can't be reached.
+export async function peekUsage(uid) {
+  const keys = keysFor(uid, Date.now())
+  const [userCount, globalCount] = await getStore().get([keys.user, keys.global])
+  const globalExhausted = globalCount >= GLOBAL_DAILY_LIMIT
+  const userRemaining = Math.max(0, DAILY_LIMIT - userCount)
+  return {
+    remaining: globalExhausted ? 0 : userRemaining,
+    limit: DAILY_LIMIT,
+    globalExhausted,
+  }
+}
 export const RATE_LIMITS = { DAILY_LIMIT, BURST_LIMIT, GLOBAL_DAILY_LIMIT, REFUND_CAP }
