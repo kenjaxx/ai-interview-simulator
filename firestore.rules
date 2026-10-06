@@ -1,14 +1,87 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ---------- validation helpers ----------
+    // Keep the limits below in step with api/evaluate.js and saveSession() in src/lib/history.js.
+    // (Rules can't import code, so role/seniority are only length-checked here on purpose: the
+    // server is what enforces the real lists, and this avoids a third copy to keep in sync.)
+
+    function isScore(v) {
+      return v is int && v >= 0 && v <= 100;
+    }
+
+    function validAverages(a) {
+      return a is map
+        && a.keys().hasOnly(['content', 'clarity', 'confidence', 'overall'])
+        && a.keys().hasAll(['content', 'clarity', 'confidence', 'overall'])
+        && isScore(a.content)
+        && isScore(a.clarity)
+        && isScore(a.confidence)
+        && isScore(a.overall);
+    }
+
+    function validMetrics(m) {
+      return m is map
+        && m.keys().hasOnly(['wpm', 'fillerCount', 'responseDelaySec'])
+        && m.keys().hasAll(['wpm', 'fillerCount', 'responseDelaySec'])
+        && m.wpm is number && m.wpm >= 0 && m.wpm <= 600
+        && m.fillerCount is number && m.fillerCount >= 0 && m.fillerCount <= 1000
+        && m.responseDelaySec is number && m.responseDelaySec >= 0 && m.responseDelaySec <= 600;
+    }
+
+    function validEvaluation(e) {
+      return e is map
+        && e.keys().hasOnly(['contentScore', 'clarityScore', 'confidenceScore', 'feedback', 'improvementTip'])
+        && e.keys().hasAll(['contentScore', 'clarityScore', 'confidenceScore', 'feedback', 'improvementTip'])
+        && isScore(e.contentScore)
+        && isScore(e.clarityScore)
+        && isScore(e.confidenceScore)
+        && e.feedback is string && e.feedback.size() <= 1000
+        && e.improvementTip is string && e.improvementTip.size() <= 500;
+    }
+
+    function validQa(q) {
+      return q is map
+        && q.keys().hasOnly(['question', 'answer', 'inputMethod', 'metrics', 'evaluation'])
+        && q.keys().hasAll(['question', 'answer', 'inputMethod', 'metrics', 'evaluation'])
+        && q.question is string && q.question.size() >= 1 && q.question.size() <= 500
+        && q.answer is string && q.answer.size() <= 4000
+        && q.inputMethod in ['voice', 'text']
+        && validMetrics(q.metrics)
+        && validEvaluation(q.evaluation);
+    }
+
+    // Rules have no loops, so each possible index (max 10 answers) is checked explicitly.
+    // An index past the end of the list passes automatically.
+    function qaOk(qas, i) {
+      return qas.size() <= i || validQa(qas[i]);
+    }
+
+    function validQas(qas) {
+      return qas is list
+        && qas.size() >= 1 && qas.size() <= 10
+        && qaOk(qas, 0) && qaOk(qas, 1) && qaOk(qas, 2) && qaOk(qas, 3) && qaOk(qas, 4)
+        && qaOk(qas, 5) && qaOk(qas, 6) && qaOk(qas, 7) && qaOk(qas, 8) && qaOk(qas, 9);
+    }
+
+    function validSession(d) {
+      return d.keys().hasOnly(['role', 'seniority', 'mode', 'overallSummary', 'averages', 'qas', 'createdAt'])
+        && d.keys().hasAll(['role', 'seniority', 'mode', 'overallSummary', 'averages', 'qas', 'createdAt'])
+        && d.role is string && d.role.size() >= 1 && d.role.size() <= 60
+        && d.seniority is string && d.seniority.size() >= 1 && d.seniority.size() <= 20
+        && d.mode in ['practice', 'full']
+        && d.overallSummary is string && d.overallSummary.size() <= 1000
+        && validAverages(d.averages)
+        && validQas(d.qas)
+        && d.createdAt == request.time; // must be serverTimestamp(), so it can't be forged
+    }
+
     // Each user can only touch their own sessions.
     match /users/{uid}/sessions/{sessionId} {
       allow read, delete: if request.auth != null && request.auth.uid == uid;
       allow create, update: if request.auth != null && request.auth.uid == uid
-        && request.resource.data.mode in ['practice', 'full']
-        && request.resource.data.qas is list
-        && request.resource.data.qas.size() >= 1
-        && request.resource.data.qas.size() <= 10;
+        && validSession(request.resource.data);
     }
   }
 }

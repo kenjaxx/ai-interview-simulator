@@ -1,4 +1,4 @@
-import { auth } from "./firebase"
+import { auth, getAppCheckToken } from "./firebase"
 
 // Set VITE_MOCK_AI=true in your .env to bypass the backend entirely during
 // UI/dev work: zero quota spent, instant fake responses.
@@ -21,7 +21,8 @@ export class GeminiApiError extends Error {
   }
 }
 
-// Slightly longer than the server's own Gemini timeout so the server's error wins the race.
+// Slightly longer than the server's own time budget (about 52s, including a retry) so the
+// server's error wins the race.
 const REQUEST_TIMEOUT_MS = 60_000
 
 // ---------- Backend call (Vercel serverless function) ----------
@@ -30,7 +31,13 @@ async function callBackend(payload) {
   const user = auth.currentUser
   if (!user) throw new GeminiApiError("You must be signed in.", { status: 401 })
 
-  const idToken = await user.getIdToken()
+  const [idToken, appCheckToken] = await Promise.all([user.getIdToken(), getAppCheckToken()])
+
+  const headers = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${idToken}`,
+  }
+  if (appCheckToken) headers["X-Firebase-AppCheck"] = appCheckToken
 
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
@@ -40,10 +47,7 @@ async function callBackend(payload) {
     res = await fetch("/api/evaluate", {
       method: "POST",
       signal: controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${idToken}`,
-      },
+      headers,
       body: JSON.stringify(payload),
     })
   } catch (err) {
@@ -157,7 +161,7 @@ function mockEvaluation(answer = "", metrics = {}, inputMethod = "voice") {
 
 // Called ONCE per interview with every question/answer/metrics triple.
 // Practice Mode is scored locally; Full AI Mode goes through /api/evaluate,
-// which verifies the Firebase login, enforces usage limits, and holds the Gemini key server-side.
+// which verifies the Firebase login (and App Check), enforces usage limits, and holds the Gemini key server-side.
 //
 // qas: [{ question, answer, inputMethod, metrics: { fillerCount, wpm, responseDelaySec } }, ...]
 //
