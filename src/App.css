@@ -425,3 +425,15 @@
   align-items: center;
 }
 .summary-actions .primary-btn { margin-top: 0; }
+
+.usage-note {
+  margin: 0 0 1.5rem;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: left;
+  color: #d8c4f5;
+  background: rgba(170, 59, 255, 0.08);
+  border: 1px solid rgba(170, 59, 255, 0.22);
+}

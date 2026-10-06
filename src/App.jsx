@@ -57,8 +57,10 @@ function messageForError(err) {
       : "You've hit the AI request limit for now. Please wait a bit and try again."
   }
 
-  if (err?.status === 503) {
-    return "Couldn't check your usage limit right now. Please try again in a moment."
+  // The server (or the client wrapper) sent a specific, user-safe message: show it.
+  // Status 0 means the request never reached the server, so the generic network message below fits better.
+  if (err?.status > 0 && err?.message) {
+    return err.message
   }
 
   return "Couldn't reach the interviewer AI. Check your connection and try again."
@@ -91,6 +93,8 @@ export default function App() {
   const [saveStatus, setSaveStatus] = useState("idle") // "idle" | "saving" | "saved" | "error"
   const [error, setError] = useState(null)
   const [awaitingFinalScore, setAwaitingFinalScore] = useState(false)
+  // { remaining, limit } from the last Full AI evaluation, or null (Practice Mode / not yet scored).
+  const [usage, setUsage] = useState(null)
   // Locked in when the interview starts, so toggling the switch mid-interview
   // never changes how the session already in progress gets scored.
   const [sessionMode, setSessionMode] = useState("practice")
@@ -215,6 +219,7 @@ export default function App() {
     setTypedAnswer("")
     setSession([])
     setOverallSummary("")
+    setUsage(null)
     setSaveStatus("idle")
     setCurrentQuestion("")
     currentQuestionRef.current = ""
@@ -242,7 +247,7 @@ export default function App() {
     setError(null)
 
     try {
-      const { evaluations, overallSummary: summaryText } = await evaluateSession({
+      const { evaluations, overallSummary: summaryText, usage: usageInfo } = await evaluateSession({
         role: config.role,
         seniority: config.seniority,
         qas: qasRef.current,
@@ -262,6 +267,7 @@ export default function App() {
 
       setSession(finalSession)
       setOverallSummary(summaryText || "")
+      setUsage(mode === "full" ? usageInfo : null)
       setScreen("summary")
       setOrbState("idle")
       setAwaitingFinalScore(false)
@@ -337,6 +343,7 @@ export default function App() {
     setTypedAnswer("")
     setSession([])
     setOverallSummary("")
+    setUsage(null)
     setSaveStatus("idle")
     setError(null)
     setNotice(null)
@@ -599,6 +606,14 @@ export default function App() {
         </div>
 
         {overallSummary && <p className="hero-sub" style={{ margin: "0 0 1.75rem", textAlign: "left" }}>{overallSummary}</p>}
+
+        {sessionMode === "full" && usage && (
+          <p className="usage-note" role="status">
+            {usage.remaining === 0
+              ? `That was your last AI evaluation for today (${usage.limit} per day). Practice Mode is still unlimited.`
+              : `${usage.remaining} of ${usage.limit} AI evaluations left today. Resets at midnight UTC.`}
+          </p>
+        )}
 
         <SessionReview session={session} />
 

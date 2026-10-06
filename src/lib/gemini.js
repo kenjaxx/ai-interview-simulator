@@ -159,20 +159,37 @@ function mockEvaluation(answer = "", metrics = {}, inputMethod = "voice") {
 // Practice Mode is scored locally; Full AI Mode goes through /api/evaluate,
 // which verifies the Firebase login, enforces usage limits, and holds the Gemini key server-side.
 //
-// qas: [{ question, answer, metrics: { fillerCount, wpm, responseDelaySec } }, ...]
+// qas: [{ question, answer, inputMethod, metrics: { fillerCount, wpm, responseDelaySec } }, ...]
+//
+// Returns: { evaluations, overallSummary, usage }
+//   usage is { remaining, limit } for Full AI Mode, or null when scored locally.
 export async function evaluateSession({ role, seniority, qas, mock = false }) {
   if (MOCK_MODE || mock) {
     await mockDelay()
     return {
-          qas: qas.map(({ question, answer, metrics, inputMethod }) => ({ question, answer, metrics, inputMethod })),
+      evaluations: qas.map((qa) => mockEvaluation(qa.answer, qa.metrics, qa.inputMethod)),
       overallSummary:
         "Solid overall performance — focus on trimming filler words and keeping a steady pace. (Practice Mode: locally scored, not real AI feedback.)",
+      usage: null,
     }
   }
 
-  return callBackend({
+  const body = await callBackend({
     role,
     seniority,
-    qas: qas.map(({ question, answer, metrics }) => ({ question, answer, metrics })),
+    // inputMethod must be sent, otherwise the server assumes "voice" and judges
+    // typed answers against pace/delay metrics that don't exist for them.
+    qas: qas.map(({ question, answer, metrics, inputMethod }) => ({
+      question,
+      answer,
+      metrics,
+      inputMethod: inputMethod === "text" ? "text" : "voice",
+    })),
   })
+
+  return {
+    evaluations: body.evaluations,
+    overallSummary: body.overallSummary || "",
+    usage: body.usage ?? null,
+  }
 }
