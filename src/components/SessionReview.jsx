@@ -1,4 +1,5 @@
 import { averageScores, entryOverall } from "../lib/scores"
+import { splitByFillers } from "../lib/fillers"
 import "./SessionReview.css"
 
 const STAR_PARTS = [
@@ -20,6 +21,8 @@ export default function SessionReview({ session, retries = {}, sessionMode }) {
 
   return (
     <>
+      <ScoreHelp />
+
       <div className="score-row">
         <div className="score-card"><span>{avg.content}</span><label>Content</label></div>
         <div className="score-card"><span>{avg.clarity}</span><label>Clarity</label></div>
@@ -29,6 +32,54 @@ export default function SessionReview({ session, retries = {}, sessionMode }) {
       {session.map((entry, i) => (
         <ReviewCard key={i} entry={entry} index={i} retry={retries[i]} sessionMode={sessionMode} />
       ))}
+    </>
+  )
+}
+
+// A short "how is this scored?" explanation that covers both modes.
+function ScoreHelp() {
+  return (
+    <details className="score-help">
+      <summary>How is this scored?</summary>
+      <ul>
+        <li><strong>Content</strong>: how relevant, deep and specific your answer is.</li>
+        <li><strong>Clarity</strong>: how well structured it is, plus your speaking pace for voice answers.</li>
+        <li><strong>Confidence</strong>: filler words, how soon you started talking, and how decisive your wording is.</li>
+      </ul>
+      <p>
+        <strong>Full AI Mode</strong> sends your answers to Gemini, which reads each one against a rubric
+        and writes the feedback, STAR check and sample answer.
+      </p>
+      <p>
+        <strong>Practice Mode</strong> scores locally from simple signals: answer length, pace, filler
+        words and delay. It judges delivery, not whether your answer is actually good.
+      </p>
+      <p>
+        Treat scores as a guide. The same answer can score a few points differently from one run to the next.
+      </p>
+    </details>
+  )
+}
+
+// Shows an answer with possible filler words marked, so you can see exactly what to cut.
+function HighlightedAnswer({ text, showNote = false }) {
+  const parts = splitByFillers(text)
+  const hasFillers = parts.some((p) => p.filler)
+
+  return (
+    <>
+      <p className="review-answer">
+        {parts.map((p, i) =>
+          p.filler ? (
+            <mark key={i} className="filler-mark" title="Possible filler word">{p.text}</mark>
+          ) : (
+            <span key={i}>{p.text}</span>
+          )
+        )}
+      </p>
+      {showNote && hasFillers && (
+        <p className="filler-note">Highlighted words may be fillers. Try pausing silently instead.</p>
+      )}
     </>
   )
 }
@@ -74,7 +125,7 @@ function RetryComparison({ original, retry, sameMode }) {
           The retry was scored in a different mode than the original, so the numbers aren't directly comparable.
         </p>
       )}
-      <p className="review-answer">{retry.answer}</p>
+      <HighlightedAnswer text={retry.answer} />
       <ul className="chip-row" aria-label="Scores for the retry">
         <li className="chip chip--score">Content <strong>{evaluation.contentScore}</strong></li>
         <li className="chip chip--score">Clarity <strong>{evaluation.clarityScore}</strong></li>
@@ -94,11 +145,11 @@ function ReviewCard({ entry, index, retry, sessionMode }) {
   return (
     <div className="review-card">
       <p className="review-index">
-  Answer {index + 1}
-  {entry.isFollowUp && <span className="follow-up-tag">Follow-up</span>}
-</p>
+        Answer {index + 1}
+        {entry.isFollowUp && <span className="follow-up-tag">Follow-up</span>}
+      </p>
       <p className="review-question">{entry.question}</p>
-      <p className="review-answer">{entry.answer}</p>
+      <HighlightedAnswer text={entry.answer} showNote />
 
       <ul className="chip-row" aria-label="Scores for this answer">
         <li className="chip chip--score">Content <strong>{evaluation.contentScore}</strong></li>

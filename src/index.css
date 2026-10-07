@@ -11,8 +11,8 @@
   --t-chip: #b8b8c2;
   --t-label: #b0b0ba;
   --t-muted: #9a9aa5;
-  --t-dim: #8a8a94;
-  --t-faint: #74747f;
+  --t-dim: #8f8f9a;
+  --t-faint: #85858f;
 
   --accent: #c084fc;
   --accent-bg: rgba(170, 59, 255, 0.1);
@@ -64,8 +64,8 @@
   --t-chip: #4a4756;
   --t-label: #4f4b5c;
   --t-muted: #5f5b6b;
-  --t-dim: #6b677a;
-  --t-faint: #7c7889;
+  --t-dim: #66627a;
+  --t-faint: #6a6677;
 
   --accent: #7c3aed;
   --accent-bg: rgba(124, 58, 237, 0.08);
@@ -108,16 +108,13 @@
 
 /* ---------- Base ---------- */
 :root {
-  /* template variables, now mapped onto the tokens above */
+  /* variables used by the base elements below, mapped onto the tokens above */
   --text: var(--t-muted);
   --text-h: var(--t-head);
   --bg: var(--app-bg);
-  --border: var(--line);
-  --code-bg: var(--chip-bg);
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
 
   font: 18px/145% var(--sans);
   letter-spacing: 0.18px;
@@ -139,11 +136,9 @@ body {
 }
 
 #root {
-  width: 1126px;
-  max-width: 100%;
+  width: 100%;
   margin: 0 auto;
   text-align: center;
-  border-inline: 1px solid var(--border);
   min-height: 100svh;
   display: flex;
   flex-direction: column;
@@ -179,17 +174,16 @@ p {
   margin: 0;
 }
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-}
-
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+/* ---------- Reduced motion ----------
+   For people who turned on "reduce motion" in their OS: no animations or transitions.
+   (Orb.jsx also skips its JavaScript scaling, and ui-extras.css keeps the spinner turning slowly.) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

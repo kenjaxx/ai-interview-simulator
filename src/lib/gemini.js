@@ -1,4 +1,5 @@
 import { auth, getAppCheckToken } from "./firebase"
+import { messageForError } from "./Errormessages"
 
 // Set VITE_MOCK_AI=true in your .env to bypass the backend entirely during
 // UI/dev work: zero quota spent, instant fake responses.
@@ -77,6 +78,20 @@ async function callBackend(payload, isValid) {
         limitScope: body?.limitScope ?? null,
       })
     }
+
+    // No JSON body means the request never reached our handler code: the route doesn't exist
+    // (plain `vite` doesn't serve /api) or the function crashed while loading.
+    if (!body) {
+      console.error(`/api/evaluate returned HTTP ${res.status} with no JSON body. Check the function logs.`)
+      if (import.meta.env.DEV && res.status === 404) {
+        throw new GeminiApiError(
+          "The /api/evaluate endpoint wasn't found. Run the app with `vercel dev` (plain `vite` doesn't serve /api), or set VITE_MOCK_AI=true in .env.",
+          { status: 404 }
+        )
+      }
+      throw new GeminiApiError("The server had a problem. Please try again in a moment.", { status: res.status })
+    }
+
     throw new GeminiApiError(body?.error || "Couldn't reach the interviewer AI.", { status: res.status })
   }
 
@@ -188,13 +203,13 @@ export async function evaluateSession({ role, seniority, qas, mock = false }) {
       seniority,
       // inputMethod must be sent, otherwise the server assumes "voice" and judges
       // typed answers against pace/delay metrics that don't exist for them.
-     qas: qas.map(({ question, answer, metrics, inputMethod, isFollowUp }) => ({
-  question,
-  answer,
-  metrics,
-  inputMethod: inputMethod === "text" ? "text" : "voice",
-  isFollowUp: !!isFollowUp,
-})),
+      qas: qas.map(({ question, answer, metrics, inputMethod, isFollowUp }) => ({
+        question,
+        answer,
+        metrics,
+        inputMethod: inputMethod === "text" ? "text" : "voice",
+        isFollowUp: !!isFollowUp,
+      })),
     },
     (b) => Array.isArray(b.evaluations)
   )
@@ -210,15 +225,38 @@ export async function evaluateSession({ role, seniority, qas, mock = false }) {
   }
 }
 
-// How many AI evaluations are left today. Spends nothing.
+// The reason the last quota check failed, in words a user can act on ("" when it succeeded).
+// The quota meter shows this under its Retry button.
+let lastUsageError = ""
+export function getUsageError() {
+  return lastUsageError
+}
+
+// Worth one more try: the request never arrived, or the server hiccuped.
+const isTransient = (err) => err instanceof GeminiApiError && (err.status === 0 || err.status >= 500)
+
+const usageIsValid = (b) => typeof b?.usage?.remaining === "number" && typeof b?.usage?.limit === "number"
+
+// How many AI evaluations are left today. Spends nothing. Retries once on a transient failure.
 // Returns { remaining, limit, globalExhausted }, or null in mock mode.
 export async function fetchUsage() {
   if (MOCK_MODE) return null
-  const body = await callBackend(
-    { action: "usage" },
-    (b) => typeof b?.usage?.remaining === "number" && typeof b?.usage?.limit === "number"
-  )
-  return body.usage
+
+  try {
+    let body
+    try {
+      body = await callBackend({ action: "usage" }, usageIsValid)
+    } catch (err) {
+      if (!isTransient(err)) throw err
+      await new Promise((resolve) => setTimeout(resolve, 1200))
+      body = await callBackend({ action: "usage" }, usageIsValid)
+    }
+    lastUsageError = ""
+    return body.usage
+  } catch (err) {
+    lastUsageError = messageForError(err)
+    throw err
+  }
 }
 
 // Asks Gemini for interview questions tailored to a pasted job description. Costs one AI evaluation.

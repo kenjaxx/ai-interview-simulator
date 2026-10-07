@@ -48,3 +48,37 @@
   background: var(--accent-bg);
   border-color: var(--accent-line);
 }
+
+/* ---------- filler word highlighting ---------- */
+
+.filler-mark {
+  padding: 0 3px;
+  border-radius: 4px;
+  color: var(--warn);
+  background: var(--warn-bg);
+  border-bottom: 1px dashed var(--warn-line);
+}
+
+.filler-note {
+  margin: -4px 0 10px;
+  font-size: 12.5px;
+  color: var(--t-muted);
+}
+
+/* ---------- "How is this scored?" ---------- */
+
+.score-help {
+  margin: 0 0 1rem;
+  padding: 10px 14px;
+  border-radius: 12px;
+  text-align: left;
+  border: 1px solid var(--line);
+  background: var(--panel-bg);
+}
+.score-help summary { cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--accent); }
+.score-help ul { margin: 10px 0 0; padding-left: 1.2rem; }
+.score-help li,
+.score-help p { font-size: 13.5px; line-height: 1.5; color: var(--t-soft); }
+.score-help li { margin: 0 0 4px; }
+.score-help p { margin: 8px 0 0; }
+.score-help strong { color: var(--t-head); }

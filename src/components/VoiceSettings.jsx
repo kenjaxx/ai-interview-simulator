@@ -52,11 +52,13 @@ export default function VoiceSettings({
     .sort((a, b) => a.name.localeCompare(b.name))
   const selected = english.some((v) => v.voiceURI === voiceURI) ? voiceURI : ""
   const autoVoice = bestVoiceForAccent(voices, lang)
+  const currentAccent = ACCENTS.find((a) => a.code === lang)
 
   return (
-    <details className="voice-settings" open>
+    <details className="voice-settings">
       <summary>
-        Accent &amp; voice <span className="jd-optional">(optional)</span>
+        Accent &amp; voice{" "}
+        <span className="jd-optional">({currentAccent ? currentAccent.label : "optional"})</span>
       </summary>
 
       <div className="field">

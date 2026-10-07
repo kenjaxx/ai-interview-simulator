@@ -48,3 +48,50 @@ export function countFillers(text) {
   }
   return Math.round(total)
 }
+
+// Where the possible filler words are in the ORIGINAL text, as merged [start, end) ranges.
+// Every rule counts here regardless of weight, so this can highlight a little more than the
+// weighted count above suggests: it marks candidates, the count is the score.
+export function findFillers(text) {
+  if (!text) return []
+  const lower = text.toLowerCase()
+  // A few Unicode characters change length when lowercased, which would shift every range.
+  if (lower.length !== text.length) return []
+
+  const ranges = []
+  for (const { pattern } of FILLER_RULES) {
+    for (const match of lower.matchAll(pattern)) {
+      // The "so" rule also matches the punctuation and space before it. Don't highlight those.
+      const lead = match[0].match(/^[.!?\s]*/)[0].length
+      const start = match.index + lead
+      const end = match.index + match[0].length
+      if (end > start) ranges.push([start, end])
+    }
+  }
+
+  ranges.sort((a, b) => a[0] - b[0])
+  const merged = []
+  for (const range of ranges) {
+    const last = merged[merged.length - 1]
+    if (last && range[0] <= last[1]) last[1] = Math.max(last[1], range[1])
+    else merged.push([range[0], range[1]])
+  }
+  return merged
+}
+
+// Splits text into [{ text, filler }] pieces, ready to render with the fillers marked.
+export function splitByFillers(text) {
+  const value = text || ""
+  const ranges = findFillers(value)
+  if (ranges.length === 0) return [{ text: value, filler: false }]
+
+  const parts = []
+  let cursor = 0
+  for (const [start, end] of ranges) {
+    if (start > cursor) parts.push({ text: value.slice(cursor, start), filler: false })
+    parts.push({ text: value.slice(start, end), filler: true })
+    cursor = end
+  }
+  if (cursor < value.length) parts.push({ text: value.slice(cursor), filler: false })
+  return parts
+}

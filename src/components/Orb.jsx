@@ -1,10 +1,15 @@
 import { useEffect, useRef } from "react"
 import "./Orb.css"
 
+const prefersReducedMotion = () =>
+  typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+
 // state: "idle" | "listening" | "thinking" | "speaking"
 // getLevel: () => 0-1 mic volume, polled every frame while listening (no React state involved)
 // subscribeWord: (callback) => unsubscribe. Fires on each spoken word, drives pulsing while speaking.
 //   Because it's a subscription rather than a prop that changes, spoken words never re-render React.
+//
+// With "reduce motion" turned on in the OS, the orb never scales: its color and label still show the state.
 export default function Orb({ state, getLevel, subscribeWord }) {
   const orbRef = useRef(null)
   const speakPulseTimeout = useRef(null)
@@ -12,7 +17,7 @@ export default function Orb({ state, getLevel, subscribeWord }) {
   // Listening: poll the mic level every frame and write the scale directly to the DOM.
   // The loop only runs while listening and is cancelled as soon as the state changes.
   useEffect(() => {
-    if (state !== "listening") return
+    if (state !== "listening" || prefersReducedMotion()) return
 
     let rafId
     const tick = () => {
@@ -29,7 +34,7 @@ export default function Orb({ state, getLevel, subscribeWord }) {
 
   // Speaking: quick pulse on every word boundary from TTS
   useEffect(() => {
-    if (state !== "speaking" || !subscribeWord) return
+    if (state !== "speaking" || !subscribeWord || prefersReducedMotion()) return
 
     const pulse = () => {
       if (!orbRef.current) return

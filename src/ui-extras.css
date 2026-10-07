@@ -1,0 +1,96 @@
+/* Styles for the setup "More options" section, answer timer, shortcut hints,
+   focus handling, and the reduced-motion spinner. Imported by App.jsx after App.css. */
+
+/* ---------- Focus ---------- */
+
+button:focus-visible,
+summary:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Headings that receive focus on screen change are not interactive, so no ring. */
+[data-screen-heading]:focus { outline: none; }
+
+/* ---------- Setup: collapsed sections ---------- */
+
+.advanced-options,
+.privacy-details {
+  text-align: left;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel-bg);
+  padding: 12px 14px;
+}
+.advanced-options > summary,
+.privacy-details > summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--t-head);
+}
+.privacy-details > summary { font-size: 13px; font-weight: 500; color: var(--t-muted); }
+.privacy-details p { margin: 10px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--t-faint); }
+
+.advanced-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--t-dim);
+}
+
+.advanced-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  margin-top: 14px;
+}
+
+/* ---------- Interview: timer and shortcut hints ---------- */
+
+.answer-timer {
+  margin: 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--t-muted);
+}
+.answer-timer--long { color: var(--warn); }
+
+.shortcut-hint,
+.typing-hint {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--t-muted);
+}
+.shortcut-hint kbd {
+  padding: 1px 6px;
+  border-radius: 5px;
+  border: 1px solid var(--line-strong);
+  background: var(--chip-bg);
+  color: var(--t-head);
+  font: inherit;
+  font-size: 12px;
+}
+
+.typing-hint { align-self: flex-end; }
+
+/* ---------- Quota meter ---------- */
+
+.quota-reason {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--warn);
+}
+
+/* ---------- Reduced motion ---------- */
+
+/* index.css freezes animations for people who asked for less motion.
+   The loading spinner is the one exception: it is feedback, so it just turns slowly. */
+@media (prefers-reduced-motion: reduce) {
+  .page-loading-spinner {
+    animation-duration: 2.5s !important;
+    animation-iteration-count: infinite !important;
+  }
+}
