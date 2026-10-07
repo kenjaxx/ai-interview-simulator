@@ -48,9 +48,10 @@ function withTimeout(promise, ms) {
 export async function saveSession(uid, sessionId, { role, seniority, mode, overallSummary, session }) {
   // Firestore rejects `undefined`, so every field is given an explicit value.
   const qas = session.map((entry) => ({
-    question: entry.question,
-    answer: entry.answer,
-    inputMethod: entry.inputMethod || "voice",
+  question: entry.question,
+  answer: entry.answer,
+  inputMethod: entry.inputMethod || "voice",
+  isFollowUp: !!entry.isFollowUp,
     metrics: {
       wpm: entry.metrics?.wpm ?? 0,
       fillerCount: entry.metrics?.fillerCount ?? 0,

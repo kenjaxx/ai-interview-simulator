@@ -54,16 +54,16 @@ service cloud.firestore {
     }
 
     function validQa(q) {
-      return q is map
-        && q.keys().hasOnly(['question', 'answer', 'inputMethod', 'metrics', 'evaluation'])
-        && q.keys().hasAll(['question', 'answer', 'inputMethod', 'metrics', 'evaluation'])
-        && q.question is string && q.question.size() >= 1 && q.question.size() <= 500
-        && q.answer is string && q.answer.size() <= 4000
-        && q.inputMethod in ['voice', 'text']
-        && validMetrics(q.metrics)
-        && validEvaluation(q.evaluation);
-    }
-
+  return q is map
+    && q.keys().hasOnly(['question', 'answer', 'inputMethod', 'metrics', 'evaluation', 'isFollowUp'])
+    && q.keys().hasAll(['question', 'answer', 'inputMethod', 'metrics', 'evaluation'])
+    && q.question is string && q.question.size() >= 1 && q.question.size() <= 500
+    && q.answer is string && q.answer.size() <= 4000
+    && q.inputMethod in ['voice', 'text']
+    && (!('isFollowUp' in q) || q.isFollowUp is bool)
+    && validMetrics(q.metrics)
+    && validEvaluation(q.evaluation);
+}
     // Rules have no loops, so each possible index (max 10 answers) is checked explicitly.
     // An index past the end of the list passes automatically.
     function qaOk(qas, i) {

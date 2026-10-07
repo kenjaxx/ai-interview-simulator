@@ -93,7 +93,10 @@ function ReviewCard({ entry, index, retry, sessionMode }) {
 
   return (
     <div className="review-card">
-      <p className="review-index">Answer {index + 1}</p>
+      <p className="review-index">
+  Answer {index + 1}
+  {entry.isFollowUp && <span className="follow-up-tag">Follow-up</span>}
+</p>
       <p className="review-question">{entry.question}</p>
       <p className="review-answer">{entry.answer}</p>
 

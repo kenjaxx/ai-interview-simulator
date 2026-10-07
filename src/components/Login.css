@@ -6,10 +6,16 @@
   justify-content: center;
   padding: 1.5rem;
   background:
-    radial-gradient(1200px 500px at 50% -10%, rgba(170, 59, 255, 0.18), transparent 60%),
-    #0d0e13;
-  color: #e8e8ea;
+    radial-gradient(1200px 500px at 50% -10%, var(--app-glow), transparent 60%),
+    var(--app-bg);
+  color: var(--t-main);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.login-theme {
+  position: fixed;
+  top: 14px;
+  right: 14px;
 }
 
 .login-card {
@@ -18,9 +24,9 @@
   padding: 2.5rem 2rem;
   border-radius: 20px;
   text-align: center;
-  background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015));
-  border: 1px solid rgba(255,255,255,0.08);
-  box-shadow: 0 24px 48px -24px rgba(0,0,0,0.6);
+  background: var(--card-bg);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-card);
   animation: login-in 0.4s ease both;
 }
 
@@ -34,7 +40,7 @@
   letter-spacing: 0.14em;
   font-size: 12px;
   font-weight: 600;
-  color: #c084fc;
+  color: var(--accent);
   margin: 0 0 1rem;
 }
 
@@ -44,11 +50,11 @@
   font-weight: 650;
   letter-spacing: -0.01em;
   margin: 0 0 0.85rem;
-  color: #f5f5f7;
+  color: var(--t-strong);
 }
 
 .login-sub {
-  color: #9a9aa5;
+  color: var(--t-muted);
   font-size: 0.95rem;
   line-height: 1.55;
   margin: 0 0 1.75rem;
@@ -62,19 +68,19 @@
   gap: 10px;
   padding: 12px 18px;
   border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.15);
-  background: #f5f5f7;
+  border: 1px solid var(--line-strong);
+  background: var(--google-bg);
   color: #1a1b22;
   font-size: 14.5px;
   font-weight: 600;
   cursor: pointer;
   transition: transform 0.1s ease, box-shadow 0.15s ease;
 }
-.google-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 24px -10px rgba(255,255,255,0.3); }
+.google-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 24px -10px rgba(120, 90, 200, 0.45); }
 .google-btn:active { transform: translateY(0); }
 
 .login-error {
   margin-top: 1rem;
-  color: #ffb3b3;
+  color: var(--danger);
   font-size: 13px;
 }

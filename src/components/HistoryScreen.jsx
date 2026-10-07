@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { loadHistoryPage, getCachedHistory, deleteSession } from "../lib/history"
 import SessionReview from "./SessionReview"
+import ExportPdfButton from "./ExportPdfButton"
 import "./HistoryScreen.css"
 
 const SERIES = [
-  { key: "content", label: "Content", color: "#c084fc" },
-  { key: "clarity", label: "Clarity", color: "#60a5fa" },
-  { key: "confidence", label: "Confidence", color: "#34c777" },
+  { key: "content", label: "Content", color: "var(--s-content)" },
+  { key: "clarity", label: "Clarity", color: "var(--s-clarity)" },
+  { key: "confidence", label: "Confidence", color: "var(--s-confidence)" },
 ]
 
 const FILTERS = [
@@ -160,6 +161,7 @@ export default function HistoryScreen({ uid, onBack }) {
                 <div className="score-card"><span>{best}</span><label>Best</label></div>
               </div>
 
+              <TrendCards sessions={chronological} />
               <ProgressChart sessions={chronological} />
 
               {deleteError && <p className="history-error" role="alert">{deleteError}</p>}
@@ -191,6 +193,11 @@ export default function HistoryScreen({ uid, onBack }) {
                           {s.overallSummary && <p className="history-summary">{s.overallSummary}</p>}
                           <SessionReview session={s.session} />
                           <div className="history-delete">
+                            <ExportPdfButton
+                              meta={{ role: s.role, seniority: s.seniority, mode: s.mode, date: s.createdAt }}
+                              overallSummary={s.overallSummary}
+                              session={s.session}
+                            />
                             {confirmId === s.id ? (
                               <>
                                 <span>Delete this session permanently?</span>
@@ -231,9 +238,78 @@ export default function HistoryScreen({ uid, onBack }) {
   )
 }
 
+// ---------- per-category trends ----------
+
+const mean = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length
+
+function Sparkline({ values, color }) {
+  const W = 84, H = 26, P = 2
+  const pts = values
+    .map((v, i) => {
+      const x = P + (i / (values.length - 1)) * (W - 2 * P)
+      const y = P + (H - 2 * P) - (Math.max(0, Math.min(100, v)) / 100) * (H - 2 * P)
+      return `${x},${y}`
+    })
+    .join(" ")
+  return (
+    <svg className="sparkline" viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
+      <polyline fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" points={pts} style={{ stroke: color }} />
+    </svg>
+  )
+}
+
+// sessions: oldest first. Compares the most recent few sessions with the few before them.
+function TrendCards({ sessions }) {
+  if (sessions.length < 2) return null
+
+  const w = Math.min(3, Math.floor(sessions.length / 2))
+  const rows = SERIES.map((s) => {
+    const values = sessions.map((e) => e.averages[s.key])
+    const recent = mean(values.slice(-w))
+    const prior = mean(values.slice(-2 * w, -w))
+    return { ...s, values, recent: Math.round(recent), delta: Math.round(recent - prior) }
+  })
+  const weakest = rows.reduce((a, b) => (b.recent < a.recent ? b : a))
+
+  return (
+    <>
+      <div className="trend-row">
+        {rows.map((r) => {
+          const tone = r.delta > 0 ? "up" : r.delta < 0 ? "down" : "same"
+          return (
+            <div className="trend-card" key={r.key}>
+              <p className="trend-label">{r.label}</p>
+              <p className="trend-value">{r.recent}</p>
+              <p className={`trend-delta trend-delta--${tone}`}>
+                {r.delta > 0 ? `▲ +${r.delta}` : r.delta < 0 ? `▼ ${r.delta}` : "– no change"}
+              </p>
+              <Sparkline values={r.values} color={r.color} />
+            </div>
+          )
+        })}
+      </div>
+      <p className="trend-note">
+        Weakest area lately: <strong>{weakest.label}</strong> ({weakest.recent}). Each card compares your last{" "}
+        {w} session{w > 1 ? "s" : ""} with the {w} before.
+      </p>
+    </>
+  )
+}
+
 function ProgressChart({ sessions }) {
+  const [hidden, setHidden] = useState(() => new Set())
+
   if (sessions.length < 2) {
     return <p className="history-empty">Finish at least two sessions to see your trend.</p>
+  }
+
+  const toggle = (key) => {
+    setHidden((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else if (SERIES.length - prev.size > 1) next.add(key) // always keep one line visible
+      return next
+    })
   }
 
   const W = 600, H = 220, L = 34, R = 12, T = 12, B = 24
@@ -247,28 +323,41 @@ function ProgressChart({ sessions }) {
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Line chart of content, clarity and confidence scores across your sessions, oldest to newest">
         {[0, 25, 50, 75, 100].map((tick) => (
           <g key={tick}>
-            <line x1={L} x2={W - R} y1={y(tick)} y2={y(tick)} stroke="rgba(255,255,255,0.08)" />
-            <text x={L - 6} y={y(tick) + 4} textAnchor="end" fontSize="11" fill="#9a9aa5">{tick}</text>
+            <line x1={L} x2={W - R} y1={y(tick)} y2={y(tick)} style={{ stroke: "var(--line)" }} />
+            <text x={L - 6} y={y(tick) + 4} textAnchor="end" fontSize="11" style={{ fill: "var(--t-muted)" }}>{tick}</text>
           </g>
         ))}
-        {SERIES.map((s) => (
+        {SERIES.filter((s) => !hidden.has(s.key)).map((s) => (
           <g key={s.key}>
             <polyline
               fill="none"
-              stroke={s.color}
               strokeWidth="2"
+              style={{ stroke: s.color }}
               points={sessions.map((e, i) => `${x(i)},${y(e.averages[s.key])}`).join(" ")}
             />
             {sessions.map((e, i) => (
-              <circle key={i} cx={x(i)} cy={y(e.averages[s.key])} r="3" fill={s.color} />
+              <circle key={i} cx={x(i)} cy={y(e.averages[s.key])} r="3" style={{ fill: s.color }} />
             ))}
           </g>
         ))}
       </svg>
       <ul className="chart-legend">
-        {SERIES.map((s) => (
-          <li key={s.key}><span className="legend-dot" style={{ background: s.color }} />{s.label}</li>
-        ))}
+        {SERIES.map((s) => {
+          const off = hidden.has(s.key)
+          return (
+            <li key={s.key}>
+              <button
+                type="button"
+                className={`legend-btn ${off ? "legend-btn--off" : ""}`}
+                aria-pressed={!off}
+                onClick={() => toggle(s.key)}
+              >
+                <span className="legend-dot" style={{ background: s.color }} />
+                {s.label}
+              </button>
+            </li>
+          )
+        })}
       </ul>
     </div>
   )

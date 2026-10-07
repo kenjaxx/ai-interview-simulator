@@ -2,12 +2,21 @@ import { useState, useRef, useCallback, useEffect } from "react"
 
 const IS_SUPPORTED = typeof window !== "undefined" && "speechSynthesis" in window
 
+// Some voices (notably network voices in Chrome) never fire `boundary` events. If none arrives
+// shortly after speech starts, the orb is pulsed on a timer at roughly speaking pace instead.
+const BOUNDARY_WAIT_MS = 900
+const FALLBACK_WPM = 160
+const MIN_PULSE_INTERVAL_MS = 180
+
 // Speaks text aloud. Word boundaries are broadcast through subscribeWord() instead of React state,
 // so the orb can pulse roughly in time with speech without re-rendering the whole app on every word
 // (no raw audio stream is available for TTS).
 // When speech isn't supported, speak() finishes immediately and the caller shows the text instead.
-export function useTextToSpeech() {
+//
+// options: { voiceURI, rate, lang } - read at speak() time, so changing them never recreates speak().
+export function useTextToSpeech({ voiceURI = "", rate = 1, lang = "en-US" } = {}) {
   const [isSpeaking, setIsSpeaking] = useState(false)
+  const [voices, setVoices] = useState(() => (IS_SUPPORTED ? window.speechSynthesis.getVoices() : []))
 
   const utteranceRef = useRef(null)
   const wordListenersRef = useRef(new Set())
@@ -15,8 +24,22 @@ export function useTextToSpeech() {
   // cancelled/replaced speech (the browser fires onend/onerror on cancel) are ignored
   // instead of, say, starting the microphone after the user already left the interview.
   const speakIdRef = useRef(0)
+  const settingsRef = useRef({ voiceURI, rate, lang })
 
-  // subscribeWord(fn) -> unsubscribe. fn is called on every spoken word boundary.
+  useEffect(() => {
+    settingsRef.current = { voiceURI, rate, lang }
+  }, [voiceURI, rate, lang])
+
+  // Voices load asynchronously in most browsers.
+  useEffect(() => {
+    if (!IS_SUPPORTED) return
+    const synth = window.speechSynthesis
+    const update = () => setVoices(synth.getVoices())
+    synth.addEventListener?.("voiceschanged", update)
+    return () => synth.removeEventListener?.("voiceschanged", update)
+  }, [])
+
+  // subscribeWord(fn) -> unsubscribe. fn is called on every spoken word (real or estimated).
   const subscribeWord = useCallback((fn) => {
     wordListenersRef.current.add(fn)
     return () => {
@@ -31,16 +54,37 @@ export function useTextToSpeech() {
     }
 
     const id = ++speakIdRef.current
+    const settings = settingsRef.current
 
     // Cancel anything currently speaking before starting new speech
     window.speechSynthesis.cancel()
 
     const utterance = new SpeechSynthesisUtterance(text)
-    utterance.rate = 1.0
+    const chosen = settings.voiceURI
+      ? window.speechSynthesis.getVoices().find((v) => v.voiceURI === settings.voiceURI)
+      : null
+    if (chosen) {
+      utterance.voice = chosen
+      utterance.lang = chosen.lang
+    } else {
+      utterance.lang = settings.lang
+    }
+    utterance.rate = settings.rate
     utterance.pitch = 1.0
+
+    const notifyWord = () => wordListenersRef.current.forEach((fn) => fn())
+
+    let boundarySeen = false
+    let watchdog = null
+    let pulseTimer = null
+    const stopFallback = () => {
+      clearTimeout(watchdog)
+      clearInterval(pulseTimer)
+    }
 
     let finished = false
     const finish = () => {
+      stopFallback()
       if (finished || speakIdRef.current !== id) return
       finished = true
       setIsSpeaking(false)
@@ -48,13 +92,28 @@ export function useTextToSpeech() {
     }
 
     utterance.onstart = () => {
-      if (speakIdRef.current === id) setIsSpeaking(true)
+      if (speakIdRef.current !== id) return
+      setIsSpeaking(true)
+
+      watchdog = setTimeout(() => {
+        if (boundarySeen || speakIdRef.current !== id) return
+        const intervalMs = Math.max(MIN_PULSE_INTERVAL_MS, 60000 / (FALLBACK_WPM * settings.rate))
+        pulseTimer = setInterval(() => {
+          if (speakIdRef.current !== id) {
+            clearInterval(pulseTimer)
+            return
+          }
+          notifyWord()
+        }, intervalMs)
+      }, BOUNDARY_WAIT_MS)
     }
 
     utterance.onboundary = (event) => {
       if (speakIdRef.current !== id) return
       if (event.name === "word") {
-        wordListenersRef.current.forEach((fn) => fn())
+        boundarySeen = true
+        stopFallback() // real boundaries are flowing, so the timer isn't needed
+        notifyWord()
       }
     }
 
@@ -81,5 +140,5 @@ export function useTextToSpeech() {
   // Stop talking if the component goes away.
   useEffect(() => stop, [stop])
 
-  return { isSpeaking, isSupported: IS_SUPPORTED, subscribeWord, speak, stop }
+  return { isSpeaking, isSupported: IS_SUPPORTED, subscribeWord, speak, stop, voices }
 }

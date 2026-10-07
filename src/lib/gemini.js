@@ -135,7 +135,7 @@ function mockEvaluation(answer = "", metrics = {}, inputMethod = "voice") {
       : `(Mock feedback) Your pace was around ${wpm || "an unmeasured"} wpm — aim for a steady, conversational rhythm to sound clearer.`,
     confidence:
       fillerCount > 0
-        ? `(Mock feedback) You used ${fillerCount} filler word${fillerCount === 1 ? "" : "s"} (um/uh/like) — cutting those down will sound more confident.`
+        ? `(Mock feedback) You used ${fillerCount} filler word${fillerCount === 1 ? "" : "s"} (um/uh/like/kind of) — cutting those down will sound more confident.`
         : typed
           ? "(Mock feedback) Your typed answer reads steadily — avoid hedging phrases to sound even more decisive."
           : `(Mock feedback) Watch your response delay (${responseDelaySec}s before you started) — jumping in sooner reads as more confident.`,
@@ -188,12 +188,13 @@ export async function evaluateSession({ role, seniority, qas, mock = false }) {
       seniority,
       // inputMethod must be sent, otherwise the server assumes "voice" and judges
       // typed answers against pace/delay metrics that don't exist for them.
-      qas: qas.map(({ question, answer, metrics, inputMethod }) => ({
-        question,
-        answer,
-        metrics,
-        inputMethod: inputMethod === "text" ? "text" : "voice",
-      })),
+     qas: qas.map(({ question, answer, metrics, inputMethod, isFollowUp }) => ({
+  question,
+  answer,
+  metrics,
+  inputMethod: inputMethod === "text" ? "text" : "voice",
+  isFollowUp: !!isFollowUp,
+})),
     },
     (b) => Array.isArray(b.evaluations)
   )
@@ -235,4 +236,18 @@ export async function generateQuestions({ role, seniority, jobDescription, count
     (b) => Array.isArray(b.questions)
   )
   return { questions: body.questions, usage: body.usage ?? null }
+}
+
+// Asks Gemini for ONE probing follow-up to a single answer. Costs one AI evaluation.
+// Returns { question: string, usage }.
+export async function generateFollowUp({ role, seniority, question, answer }) {
+  if (MOCK_MODE) {
+    await mockDelay()
+    return { question: "(Mock) Can you walk me through a concrete example of that?", usage: null }
+  }
+  const body = await callBackend(
+    { action: "followup", role, seniority, question, answer },
+    (b) => typeof b?.question === "string" && b.question.trim().length > 0
+  )
+  return { question: body.question, usage: body.usage ?? null }
 }

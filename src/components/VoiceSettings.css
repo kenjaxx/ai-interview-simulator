@@ -1,0 +1,21 @@
+.voice-settings {
+  text-align: left;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel-bg);
+  padding: 12px 14px;
+}
+.voice-settings summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--t-head); }
+.voice-settings .field { margin-top: 12px; }
+
+.rate-row { display: flex; align-items: center; gap: 12px; }
+.rate-row input[type="range"] { flex: 1; accent-color: #aa3bff; }
+.rate-value {
+  min-width: 3.2em;
+  text-align: right;
+  font-size: 13px;
+  color: var(--t-chip);
+  font-variant-numeric: tabular-nums;
+}
+
+.voice-preview { margin-top: 12px; }

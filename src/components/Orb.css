@@ -37,6 +37,6 @@
 
 .orb-label {
   font-size: 13px;
-  color: #9a9a9a;
+  color: var(--t-muted);
   letter-spacing: 0.02em;
 }

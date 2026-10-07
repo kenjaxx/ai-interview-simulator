@@ -10,7 +10,7 @@ export default function RetryCard({ session, weakestIndex, usesAi, onRetry }) {
       <div>
         <p className="retry-title">Retry your weakest answer</p>
         <p className="retry-sub">
-          Question {weakestIndex + 1} scored {entryOverall(entry)}: “{entry.question}”{" "}
+          Answer {weakestIndex + 1} scored {entryOverall(entry)}: “{entry.question}”{" "}
           {usesAi
             ? "Re-answering uses 1 AI evaluation."
             : "It will be scored locally in Practice Mode."}

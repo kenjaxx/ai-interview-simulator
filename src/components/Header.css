@@ -5,8 +5,8 @@
   justify-content: space-between;
   padding: 14px 20px;
   box-sizing: border-box;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-  background: rgba(13, 14, 19, 0.7);
+  border-bottom: 1px solid var(--line);
+  background: var(--header-bg);
   backdrop-filter: blur(10px);
   position: sticky;
   top: 0;
@@ -19,7 +19,7 @@
   gap: 8px;
   font-size: 14px;
   font-weight: 650;
-  color: #f0f0f2;
+  color: var(--t-head);
   letter-spacing: -0.01em;
 }
 
@@ -42,7 +42,7 @@
   height: 28px;
   border-radius: 50%;
   object-fit: cover;
-  border: 1px solid rgba(255,255,255,0.15);
+  border: 1px solid var(--line-strong);
 }
 
 .app-header-avatar--fallback {
@@ -57,7 +57,7 @@
 
 .app-header-name {
   font-size: 13.5px;
-  color: #cfcfd6;
+  color: var(--t-main);
   max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -67,15 +67,15 @@
 .app-header-signout {
   padding: 6px 12px;
   border-radius: 8px;
-  border: 1px solid rgba(255,255,255,0.15);
+  border: 1px solid var(--line-strong);
   background: transparent;
-  color: #cfcfd6;
+  color: var(--t-main);
   font-size: 12.5px;
   font-weight: 500;
   cursor: pointer;
   transition: border-color 0.15s ease, color 0.15s ease;
 }
-.app-header-signout:hover { border-color: #c084fc; color: #c084fc; }
+.app-header-signout:hover { border-color: var(--accent); color: var(--accent); }
 
 @media (max-width: 480px) {
   .app-header-name { display: none; }

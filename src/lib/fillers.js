@@ -2,14 +2,30 @@
 // Each rule has a weight because some words are fillers only some of the time.
 //
 // Note: Chrome's speech recognition usually returns text with no punctuation, so a strict
-// "sentence start" rule would almost never match. That's why "like" and "actually" use lower
-// weights (and "like" a small exclusion list) instead of depending on punctuation.
+// "sentence start" rule would almost never match. That's why most rules here avoid depending on
+// punctuation and use low weights or a small exclusion list instead. "right?" only matches when
+// a question mark is actually present (typed answers, or recognizers that add punctuation).
+
+// Words that make "kind of" / "sort of" a real noun phrase ("what kind of", "a sort of"...).
+const KIND_SORT_EXCLUDED_AFTER =
+  "a|an|the|what|which|this|that|these|those|any|some|every|each|same|another|other|different|one|no|whatever|all|such|certain|particular|special|new|what's|whats"
+
 const FILLER_RULES = [
   // Nearly always a filler.
   { pattern: /\b(?:um+|uh+|uhm+|erm|er|hmm+)\b/g, weight: 1 },
   // Often a filler, but also legitimate ("do you know", "basically the same").
   { pattern: /\byou know\b/g, weight: 0.5 },
   { pattern: /\b(?:basically|actually)\b/g, weight: 0.5 },
+  // Hedges that stall or soften.
+  { pattern: /\bi mean\b/g, weight: 0.5 },
+  { pattern: /\b(?:kinda|sorta)\b/g, weight: 0.5 },
+  {
+    pattern: new RegExp(`(?<!\\b(?:${KIND_SORT_EXCLUDED_AFTER})\\s)\\b(?:kind|sort) of\\b`, "g"),
+    weight: 0.5,
+  },
+  { pattern: /\bright\s*\?/g, weight: 0.5 },
+  { pattern: /\b(?:or something|or whatever|and stuff)\b/g, weight: 0.25 },
+  { pattern: /\bi guess\b/g, weight: 0.25 },
   // "like" is legitimate after these ("I would like", "looks like", "feels like"...).
   {
     pattern:

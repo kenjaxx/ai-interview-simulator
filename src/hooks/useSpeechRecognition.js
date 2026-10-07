@@ -52,7 +52,7 @@ export function useSpeechRecognition() {
   const lastResultAtRef = useRef(null) // when the transcript last actually changed
   const promptShownAtRef = useRef(null)
   const sessionIdRef = useRef(0) // guards against stale/late events from old sessions
-
+  const langRef = useRef("en-US")
   const onFinalRef = useRef(null)
   const onEmptyRef = useRef(null)
   const onErrorRef = useRef(null)
@@ -161,7 +161,7 @@ export function useSpeechRecognition() {
     const recognition = new SpeechRecognition()
     recognition.continuous = true
     recognition.interimResults = true
-    recognition.lang = "en-US"
+    recognition.lang = langRef.current
 
     recognition.onresult = (event) => {
       if (sessionIdRef.current !== sessionId) return
@@ -243,18 +243,20 @@ export function useSpeechRecognition() {
     recognition.start()
   }, [armBackstop, fail, finalize, setTranscript])
 
-  const startListening = useCallback(({ promptShownAt, onFinal, onEmpty, onError } = {}) => {
-    if (!getSpeechRecognition()) {
-      onError?.("Speech recognition isn't supported in this browser. Try Chrome or Edge.")
-      return
-    }
+ const startListening = useCallback(({ promptShownAt, onFinal, onEmpty, onError, lang } = {}) => {
+  if (!getSpeechRecognition()) {
+    onError?.("Speech recognition isn't supported in this browser. Try Chrome or Edge.")
+    return
+  }
 
-    // Fully retire any previous session before starting a new one
-    clearTimers()
-    retire(recognitionRef.current)
-    recognitionRef.current = null
+  // Fully retire any previous session before starting a new one
+  clearTimers()
+  retire(recognitionRef.current)
+  recognitionRef.current = null
 
-    const sessionId = ++sessionIdRef.current
+  langRef.current = lang || "en-US"
+  const sessionId = ++sessionIdRef.current
+  // ...the rest is unchanged
     onFinalRef.current = onFinal || null
     onEmptyRef.current = onEmpty || null
     onErrorRef.current = onError || null

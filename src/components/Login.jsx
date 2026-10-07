@@ -1,4 +1,5 @@
 import { useAuth } from "../context/AuthContext"
+import ThemeToggle from "./ThemeToggle"
 import "./Login.css"
 
 export default function Login() {
@@ -6,6 +7,7 @@ export default function Login() {
 
   return (
     <div className="login-page">
+      <ThemeToggle className="login-theme" />
       <div className="login-card">
         <p className="eyebrow">AI Interview Coach</p>
         <h1>Sign in to start practicing</h1>

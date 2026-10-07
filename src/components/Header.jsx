@@ -1,4 +1,5 @@
 import { useAuth } from "../context/AuthContext"
+import ThemeToggle from "./ThemeToggle"
 import "./Header.css"
 
 // onHistory is optional: the History link only shows on screens where leaving is safe.
@@ -13,6 +14,7 @@ export default function Header({ onHistory }) {
         AI Interview Coach
       </div>
       <div className="app-header-user">
+        <ThemeToggle />
         {onHistory && (
           <button className="app-header-signout" onClick={onHistory}>History</button>
         )}

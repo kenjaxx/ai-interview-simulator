@@ -2,7 +2,9 @@ import Orb from "./components/Orb"
 import Header from "./components/Header"
 import Login from "./components/Login"
 import ModeToggle from "./components/ModeToggle"
+import ToggleRow from "./components/ToggleRow"
 import AnswerModePicker from "./components/AnswerModePicker"
+import VoiceSettings from "./components/VoiceSettings"
 import SessionReview from "./components/SessionReview"
 import HistoryScreen from "./components/HistoryScreen"
 import LiveTranscript from "./components/LiveTranscript"
@@ -10,6 +12,7 @@ import TypingPanel from "./components/TypingPanel"
 import QuotaMeter from "./components/QuotaMeter"
 import JobDescriptionInput from "./components/JobDescriptionInput"
 import RetryCard from "./components/RetryCard"
+import ExportPdfButton from "./components/ExportPdfButton"
 import { useAuth } from "./context/AuthContext"
 import { useInterview, MIN_JD_CHARS, MAX_JD_CHARS } from "./hooks/UseInterview"
 import { ROLES, SENIORITIES } from "./lib/Options"
@@ -45,6 +48,10 @@ export default function App() {
     const jdReason = setup.aiMode !== "full"
       ? "Switch to Full AI Mode to tailor questions to a job description."
       : "You need at least 2 AI evaluations left (one for the questions, one for scoring)."
+
+    const followUpReason = setup.aiMode !== "full"
+      ? "Switch to Full AI Mode to get follow-up questions."
+      : `You need at least ${1 + setup.maxFollowUps} AI evaluations left for follow-ups.`
 
     return (
       <div className="page">
@@ -86,6 +93,18 @@ export default function App() {
 
           <AnswerModePicker value={setup.setupMode} onChange={setup.setInputPref} support={setup.support} mic={setup.mic} />
 
+          <VoiceSettings
+            support={setup.support}
+            lang={setup.speechLang}
+            onLang={setup.setSpeechLang}
+            voices={setup.voices}
+            voiceURI={setup.ttsVoiceURI}
+            onVoice={setup.setTtsVoiceURI}
+            rate={setup.ttsRate}
+            onRate={setup.setTtsRate}
+            onPreview={setup.previewVoice}
+          />
+
           <ModeToggle
             mode={setup.aiMode}
             onChange={setup.setAiMode}
@@ -99,6 +118,16 @@ export default function App() {
 
           <QuotaMeter quota={setup.quota} status={setup.quotaStatus} onRefresh={setup.refreshQuota} />
 
+          <ToggleRow
+            title="Follow-up questions"
+            description={`After some answers the AI asks one probing follow-up based on what you said. Full AI Mode only. Uses up to ${setup.maxFollowUps} extra AI evaluations.`}
+            checked={setup.followUps && setup.followUpsAvailable}
+            onChange={setup.setFollowUps}
+            disabled={!setup.followUpsAvailable || setup.starting}
+            disabledReason={followUpReason}
+            label="Toggle follow-up questions"
+          />
+
           <JobDescriptionInput
             value={setup.jobDescription}
             onChange={setup.setJobDescription}
@@ -107,6 +136,19 @@ export default function App() {
             min={MIN_JD_CHARS}
             max={MAX_JD_CHARS}
             disabled={setup.starting}
+          />
+
+          <ToggleRow
+            title="Save sessions to my history"
+            description={
+              setup.saveHistory
+                ? "Finished sessions, including your answers, are stored in your account."
+                : "Private mode: this session won't be stored. In Full AI Mode your answers are still sent to Gemini for scoring."
+            }
+            checked={setup.saveHistory}
+            onChange={setup.setSaveHistory}
+            disabled={setup.starting}
+            label="Toggle saving sessions to history"
           />
 
           <button className="primary-btn" onClick={setup.start} disabled={setup.starting}>
@@ -120,8 +162,10 @@ export default function App() {
           <p className="setup-note">
             Privacy: speech-to-text is done by your browser, and Chrome and Edge send audio to their
             own cloud services for that. In Full AI Mode, your answers (and a job description, if you
-            paste one) are also sent to Google's Gemini API. Finished sessions, including your answers,
-            are saved to your account so you can track progress, and you can delete any of them from History.
+            paste one) are also sent to Google's Gemini API.{" "}
+            {setup.saveHistory
+              ? "Finished sessions, including your answers, are saved to your account so you can track progress, and you can delete any of them from History."
+              : "Sessions are not saved to your account while the save toggle is off."}
           </p>
         </div>
       </div>
@@ -136,33 +180,50 @@ export default function App() {
       inputMode,
       isListening,
       error,
+      isFollowUp,
+      preparingFollowUp,
     } = interview
+    const busy = scoring || preparingFollowUp
+
+    let progress
+    if (preparingFollowUp) {
+      progress = "Thinking of a follow-up…"
+    } else if (scoring) {
+      progress = isRetry ? "Scoring your retry…" : "Scoring your interview…"
+    } else if (isRetry) {
+      progress = `Retry · re-answering answer ${interview.retryQuestionNumber}`
+    } else if (isFollowUp) {
+      progress = `Follow-up · question ${Math.min(interview.questionIndex + 1, interview.questionTotal)} of ${interview.questionTotal}`
+    } else {
+      progress = `Question ${Math.min(interview.questionIndex + 1, interview.questionTotal)} of ${interview.questionTotal} · ${interview.answeredCount} answered`
+    }
 
     return (
       <div className="page">
         <Header />
         <div className="interview-shell">
-          <p className="progress-label">
-            {scoring
-              ? isRetry ? "Scoring your retry…" : "Scoring your interview…"
-              : isRetry
-                ? `Retry · re-answering question ${interview.retryQuestionNumber}`
-                : `Question ${Math.min(interview.questionIndex + 1, interview.questionTotal)} of ${interview.questionTotal} · ${interview.answeredCount} answered`}
-          </p>
+          <p className="progress-label">{progress}</p>
 
           <Orb state={interview.orbState} getLevel={interview.getLevel} subscribeWord={interview.subscribeWord} />
 
-          {!scoring && <p className="question-text">{interview.currentQuestion}</p>}
+          {preparingFollowUp && (
+            <div className="followup-wait" role="status">
+              <p className="inline-note">The interviewer is reading your answer…</p>
+              <button className="secondary-btn" onClick={interview.skipFollowUp}>Skip follow-up</button>
+            </div>
+          )}
 
-          {!scoring && !isRetry && interview.sessionNote && (
+          {!busy && <p className="question-text">{interview.currentQuestion}</p>}
+
+          {!busy && !isRetry && interview.sessionNote && (
             <p className="inline-note">{interview.sessionNote}</p>
           )}
 
-          {!interview.ttsSupported && !scoring && (
+          {!interview.ttsSupported && !busy && (
             <p className="inline-note">This browser can't read questions aloud, so they're shown on screen only.</p>
           )}
 
-          {!scoring && inputMode === "voice" && isListening && (
+          {!busy && inputMode === "voice" && isListening && (
             <div className="listening-panel">
               <LiveTranscript subscribe={interview.subscribeTranscript} getSnapshot={interview.getTranscript} />
               <button className="finish-btn" onClick={interview.finishAnswer}>
@@ -171,9 +232,9 @@ export default function App() {
             </div>
           )}
 
-          {!scoring && inputMode === "text" && (
+          {!busy && inputMode === "text" && (
             <TypingPanel
-              key={`${isRetry ? "retry" : "q"}-${interview.questionIndex}-${interview.retryQuestionNumber}`}
+              key={`${isRetry ? "retry" : "q"}-${interview.questionIndex}-${interview.retryQuestionNumber}-${isFollowUp ? "f" : "m"}`}
               onSubmit={interview.submitTyped}
             />
           )}
@@ -200,7 +261,7 @@ export default function App() {
             </div>
           )}
 
-          {!scoring && (
+          {!busy && (
             <div className="interview-controls">
               <button className="secondary-btn" onClick={interview.replay} disabled={!interview.ttsSupported}>
                 Replay question
@@ -211,7 +272,9 @@ export default function App() {
                 </button>
               )}
               {!isRetry && (
-                <button className="secondary-btn" onClick={interview.skip}>Skip</button>
+                <button className="secondary-btn" onClick={interview.skip}>
+                  {isFollowUp ? "Skip follow-up" : "Skip"}
+                </button>
               )}
               {inputMode === "voice" ? (
                 <button className="secondary-btn" onClick={interview.switchToText}>Type instead</button>
@@ -274,6 +337,9 @@ export default function App() {
         <div className="save-status" role="status">
           {summary.saveStatus === "saving" && <span>Saving to your history…</span>}
           {summary.saveStatus === "saved" && <span>Saved to your history.</span>}
+          {summary.saveStatus === "skipped" && (
+            <span>Private session: this one wasn't saved to your history. Export it as a PDF if you want to keep it.</span>
+          )}
           {summary.saveStatus === "error" && (
             <>
               <span>Couldn't save this session to your history.</span>
@@ -285,6 +351,12 @@ export default function App() {
         <div className="summary-actions">
           <button className="primary-btn" onClick={summary.restart}>Practice again</button>
           <button className="secondary-btn" onClick={() => setScreen("history")}>View history</button>
+          <ExportPdfButton
+            meta={summary.meta}
+            overallSummary={summary.overallSummary}
+            session={summary.session}
+            retries={summary.retryResults}
+          />
         </div>
       </div>
     </div>
