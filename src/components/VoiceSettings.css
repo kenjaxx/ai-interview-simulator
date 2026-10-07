@@ -8,6 +8,76 @@
 .voice-settings summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--t-head); }
 .voice-settings .field { margin-top: 12px; }
 
+/* ---------- accent list ---------- */
+
+.accent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.accent-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  border-radius: 10px;
+  border: 1px solid var(--line-input);
+  background: var(--input-bg);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.accent-row:hover { border-color: var(--accent-line); }
+.accent-row--on {
+  border-color: var(--accent);
+  background: var(--accent-bg-strong);
+}
+
+.accent-pick {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 4px 9px 12px;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.accent-radio {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--line-strong);
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.accent-row--on .accent-radio {
+  border-color: var(--accent);
+  background: radial-gradient(circle, var(--accent) 0 40%, transparent 45%);
+}
+
+.accent-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.accent-name { font-size: 14px; font-weight: 600; color: var(--t-head); }
+.accent-status { font-size: 12px; line-height: 1.35; }
+.accent-status--ok { color: var(--ok); }
+.accent-status--none { color: var(--t-dim); }
+
+.accent-play {
+  flex-shrink: 0;
+  align-self: center;
+  margin-right: 8px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+/* ---------- speed + preview ---------- */
+
 .rate-row { display: flex; align-items: center; gap: 12px; }
 .rate-row input[type="range"] { flex: 1; accent-color: #aa3bff; }
 .rate-value {
@@ -19,3 +89,8 @@
 }
 
 .voice-preview { margin-top: 12px; }
+
+@media (max-width: 420px) {
+  .accent-row { flex-wrap: wrap; }
+  .accent-play { margin: 0 0 8px 38px; }
+}

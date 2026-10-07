@@ -1,52 +1,125 @@
-import { ACCENTS, RATE_MIN, RATE_MAX, RATE_STEP } from "../lib/speechOptions"
+import { useState } from "react"
+import {
+  ACCENTS,
+  RATE_MIN,
+  RATE_MAX,
+  RATE_STEP,
+  normLang,
+  voicesForAccent,
+  bestVoiceForAccent,
+} from "../lib/speechOptions"
 import "./VoiceSettings.css"
 
-const norm = (lang = "") => lang.toLowerCase().replace("_", "-")
-
-// support: result of getSupport(). voices: SpeechSynthesisVoice[] from useTextToSpeech.
+// support:         result of getSupport()
+// lang:            the chosen accent code, e.g. "en-AU"
+// onSelectAccent:  (code) => void   picks the accent AND resets to the automatic voice for it
+// voices:          SpeechSynthesisVoice[] from useTextToSpeech
+// voiceURI:        a manually chosen voice, or "" for automatic
+// onPreviewAccent: (code, onEnd) => void
+// onPreviewVoice:  (onEnd) => void   previews the current accent / voice / speed settings
+// onStopPreview:   () => void
 export default function VoiceSettings({
   support,
   lang,
-  onLang,
+  onSelectAccent,
   voices,
   voiceURI,
   onVoice,
   rate,
   onRate,
-  onPreview,
+  onPreviewAccent,
+  onPreviewVoice,
+  onStopPreview,
 }) {
-  const english = voices.filter((v) => norm(v.lang).startsWith("en"))
-  const wanted = norm(lang)
-  // Voices that match the chosen accent come first.
-  const sorted = [...english].sort(
-    (a, b) =>
-      Number(norm(b.lang) === wanted) - Number(norm(a.lang) === wanted) || a.name.localeCompare(b.name)
-  )
-  const selected = sorted.some((v) => v.voiceURI === voiceURI) ? voiceURI : ""
+  // Which preview is playing: an accent code, "voice", or null.
+  const [playing, setPlaying] = useState(null)
+
+  const play = (key, start) => {
+    if (playing === key) {
+      onStopPreview()
+      setPlaying(null)
+      return
+    }
+    setPlaying(key)
+    // Clears the button when speech ends, unless another preview has taken over by then.
+    start(() => setPlaying((current) => (current === key ? null : current)))
+  }
+
+  const english = voices.filter((v) => normLang(v.lang).startsWith("en"))
+  const matching = voicesForAccent(voices, lang)
+  const others = english
+    .filter((v) => !matching.includes(v))
+    .sort((a, b) => a.name.localeCompare(b.name))
+  const selected = english.some((v) => v.voiceURI === voiceURI) ? voiceURI : ""
+  const autoVoice = bestVoiceForAccent(voices, lang)
 
   return (
-    <details className="voice-settings">
+    <details className="voice-settings" open>
       <summary>
-        Voice &amp; language <span className="jd-optional">(optional)</span>
+        Accent &amp; voice <span className="jd-optional">(optional)</span>
       </summary>
 
       <div className="field">
-        <label htmlFor="speech-lang">Your accent (for speech recognition)</label>
-        <select
-          id="speech-lang"
-          value={lang}
-          onChange={(e) => onLang(e.target.value)}
-          disabled={!support.recognition}
-        >
-          {ACCENTS.map((a) => (
-            <option key={a.code} value={a.code}>{a.label}</option>
-          ))}
-        </select>
-        <p className="mode-notice">
-          {support.recognition
-            ? "Questions are asked in English, so only English accents are listed."
-            : "Speech recognition isn't available in this browser, so this only applies when you can use voice."}
+        <span className="field-label" id="accent-label">Your accent</span>
+        <p className="mode-notice" style={{ marginTop: 0 }}>
+          Used for speech recognition and for the interviewer's voice. Press ▶ to hear each one.
+          Which voices exist depends on your device and browser.
         </p>
+
+        <div className="accent-list" role="radiogroup" aria-labelledby="accent-label">
+          {ACCENTS.map((a) => {
+            const matches = voicesForAccent(voices, a.code)
+            const best = matches[0]
+            const active = a.code === lang
+
+            let status = ""
+            let tone = "none"
+            if (!support.synthesis) {
+              status = "Voice preview isn't available in this browser"
+            } else if (voices.length === 0) {
+              status = "Checking for voices…"
+            } else if (best) {
+              tone = "ok"
+              status = `✓ ${best.name}${matches.length > 1 ? ` (+${matches.length - 1} more)` : ""}`
+            } else {
+              status = "No voice on this device, so the default English voice is used"
+            }
+
+            return (
+              <div key={a.code} className={`accent-row ${active ? "accent-row--on" : ""}`}>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  className="accent-pick"
+                  onClick={() => onSelectAccent(a.code)}
+                >
+                  <span className="accent-radio" aria-hidden="true" />
+                  <span className="accent-text">
+                    <span className="accent-name">{a.label}</span>
+                    <span className={`accent-status accent-status--${tone}`}>{status}</span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="secondary-btn accent-play"
+                  onClick={() => play(a.code, (done) => onPreviewAccent(a.code, done))}
+                  disabled={!support.synthesis}
+                  aria-label={`${playing === a.code ? "Stop" : "Preview"} ${a.label}`}
+                >
+                  {playing === a.code ? "■ Stop" : "▶ Preview"}
+                </button>
+              </div>
+            )
+          })}
+        </div>
+
+        {!support.recognition && (
+          <p className="mode-notice">
+            Speech recognition isn't available in this browser, so the accent only changes the
+            interviewer's voice here. Typing works as normal.
+          </p>
+        )}
       </div>
 
       {support.synthesis ? (
@@ -54,12 +127,23 @@ export default function VoiceSettings({
           <div className="field">
             <label htmlFor="tts-voice">Interviewer voice</label>
             <select id="tts-voice" value={selected} onChange={(e) => onVoice(e.target.value)}>
-              <option value="">Browser default</option>
-              {sorted.map((v) => (
-                <option key={v.voiceURI} value={v.voiceURI}>
-                  {v.name} ({v.lang})
-                </option>
-              ))}
+              <option value="">
+                {autoVoice ? `Automatic (${autoVoice.name})` : "Automatic (browser default)"}
+              </option>
+              {matching.length > 0 && (
+                <optgroup label="Matches your accent">
+                  {matching.map((v) => (
+                    <option key={v.voiceURI} value={v.voiceURI}>{v.name} ({v.lang})</option>
+                  ))}
+                </optgroup>
+              )}
+              {others.length > 0 && (
+                <optgroup label="Other English voices">
+                  {others.map((v) => (
+                    <option key={v.voiceURI} value={v.voiceURI}>{v.name} ({v.lang})</option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </div>
 
@@ -79,8 +163,12 @@ export default function VoiceSettings({
             </div>
           </div>
 
-          <button type="button" className="secondary-btn voice-preview" onClick={onPreview}>
-            Preview voice
+          <button
+            type="button"
+            className="secondary-btn voice-preview"
+            onClick={() => play("voice", (done) => onPreviewVoice(done))}
+          >
+            {playing === "voice" ? "■ Stop" : "▶ Preview my settings"}
           </button>
           <p className="mode-notice">
             Some voices don't report word timing. The orb then pulses on a timer instead.

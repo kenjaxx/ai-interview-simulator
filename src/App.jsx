@@ -92,17 +92,18 @@ export default function App() {
           </div>
 
           <AnswerModePicker value={setup.setupMode} onChange={setup.setInputPref} support={setup.support} mic={setup.mic} />
-
           <VoiceSettings
             support={setup.support}
             lang={setup.speechLang}
-            onLang={setup.setSpeechLang}
+            onSelectAccent={setup.selectAccent}
             voices={setup.voices}
             voiceURI={setup.ttsVoiceURI}
             onVoice={setup.setTtsVoiceURI}
             rate={setup.ttsRate}
             onRate={setup.setTtsRate}
-            onPreview={setup.previewVoice}
+            onPreviewAccent={setup.previewAccent}
+            onPreviewVoice={setup.previewVoice}
+            onStopPreview={setup.stopPreview}
           />
 
           <ModeToggle

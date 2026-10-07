@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react"
+import { bestVoiceForAccent } from "../lib/speechOptions"
 
 const IS_SUPPORTED = typeof window !== "undefined" && "speechSynthesis" in window
 
@@ -14,6 +15,12 @@ const MIN_PULSE_INTERVAL_MS = 180
 // When speech isn't supported, speak() finishes immediately and the caller shows the text instead.
 //
 // options: { voiceURI, rate, lang } - read at speak() time, so changing them never recreates speak().
+//
+// Voice choice: an explicitly chosen voice wins. Otherwise the best installed voice for the accent
+// is picked here, instead of trusting the browser's own fallback (which often ignores the accent).
+//
+// speak(text, onEnd, override) - override can replace voiceURI / lang for one call (used by the
+// accent preview buttons).
 export function useTextToSpeech({ voiceURI = "", rate = 1, lang = "en-US" } = {}) {
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [voices, setVoices] = useState(() => (IS_SUPPORTED ? window.speechSynthesis.getVoices() : []))
@@ -35,6 +42,7 @@ export function useTextToSpeech({ voiceURI = "", rate = 1, lang = "en-US" } = {}
     if (!IS_SUPPORTED) return
     const synth = window.speechSynthesis
     const update = () => setVoices(synth.getVoices())
+    update()
     synth.addEventListener?.("voiceschanged", update)
     return () => synth.removeEventListener?.("voiceschanged", update)
   }, [])
@@ -47,22 +55,24 @@ export function useTextToSpeech({ voiceURI = "", rate = 1, lang = "en-US" } = {}
     }
   }, [])
 
-  const speak = useCallback((text, onEnd) => {
+  const speak = useCallback((text, onEnd, override = {}) => {
     if (!IS_SUPPORTED) {
       onEnd?.()
       return
     }
 
     const id = ++speakIdRef.current
-    const settings = settingsRef.current
+    const settings = { ...settingsRef.current, ...override }
 
     // Cancel anything currently speaking before starting new speech
     window.speechSynthesis.cancel()
 
     const utterance = new SpeechSynthesisUtterance(text)
-    const chosen = settings.voiceURI
-      ? window.speechSynthesis.getVoices().find((v) => v.voiceURI === settings.voiceURI)
-      : null
+    const allVoices = window.speechSynthesis.getVoices()
+    const chosen =
+      (settings.voiceURI ? allVoices.find((v) => v.voiceURI === settings.voiceURI) : null) ||
+      bestVoiceForAccent(allVoices, settings.lang)
+
     if (chosen) {
       utterance.voice = chosen
       utterance.lang = chosen.lang

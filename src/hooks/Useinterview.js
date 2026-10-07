@@ -1,19 +1,11 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from "react"
-import { useSpeechRecognition } from "./useSpeechRecognition"
-import { useTextToSpeech } from "./useTextToSpeech"
-import { useAudioLevel } from "./useAudioLevel"
-import { useMicPermission } from "./useMicPermission"
-import { usePreference } from "./usePreference"
-import { evaluateSession, fetchUsage, generateQuestions, generateFollowUp } from "../lib/gemini"
-import { pickQuestions, getRecentQuestions, rememberQuestions } from "../lib/questions"
-import { countFillers } from "../lib/fillers"
-import { findWeakestIndex } from "../lib/scores"
-import { getSupport, voiceAvailable } from "../lib/support"
-import { newSessionId, saveSession } from "../lib/history"
-import { ROLES } from "../lib/Options"
-import { readStored, writeStored } from "../lib/Storage"
-import { messageForError } from "../lib/errorMessages"
-import { DEFAULT_LANG, DEFAULT_RATE, RATE_MIN, RATE_MAX, isValidLang } from "../lib/speechOptions"
+import {
+  DEFAULT_LANG,
+  DEFAULT_RATE,
+  RATE_MIN,
+  RATE_MAX,
+  PREVIEW_TEXT,
+  isValidLang,
+} from "../lib/speechOptions"
 
 export const QUESTION_COUNT = 6
 // Job-description questions. Keep MIN/MAX in step with api/evaluate.js.
@@ -275,10 +267,28 @@ export function useInterview({ user, authLoading }) {
     speak(question, beginAnswering)
   }, [stopListening, speak, acquireMic, beginAnswering])
 
-  // Reads the sample sentence aloud with the current voice settings (setup screen preview).
-  const previewVoice = useCallback(() => {
-    speak("Tell me about a recent project you're proud of and what made it challenging.")
+   // ---------- accent + voice previews (setup screen) ----------
+
+  // Picking an accent also drops any manually chosen voice. Otherwise a voice picked earlier
+  // (say a UK one) would keep speaking after switching to Australia. With the voice cleared,
+  // useTextToSpeech automatically uses the best installed voice for the new accent.
+  const selectAccent = useCallback((code) => {
+    if (!isValidLang(code)) return
+    setSpeechLang(code)
+    setTtsVoiceURI("")
+  }, [setSpeechLang, setTtsVoiceURI])
+
+  // Plays one accent's automatic voice, regardless of what is currently selected.
+  const previewAccent = useCallback((code, onEnd) => {
+    speak(PREVIEW_TEXT, onEnd, { voiceURI: "", lang: code })
   }, [speak])
+
+  // Plays the current accent, voice and speed settings together.
+  const previewVoice = useCallback((onEnd) => {
+    speak(PREVIEW_TEXT, onEnd)
+  }, [speak])
+
+  const stopPreview = stopSpeaking
 
   // ---------- flow ----------
 
@@ -781,13 +791,15 @@ export function useInterview({ user, authLoading }) {
       saveHistory,
       setSaveHistory,
       speechLang,
-      setSpeechLang,
+      selectAccent,
       ttsVoiceURI,
       setTtsVoiceURI,
       ttsRate,
       setTtsRate,
       voices,
+      previewAccent,
       previewVoice,
+      stopPreview,
       starting,
       setupMode,
       setInputPref,
