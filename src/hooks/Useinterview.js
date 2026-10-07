@@ -1,3 +1,20 @@
+import { useState, useRef, useCallback, useEffect, useMemo } from "react"
+
+import { ROLES } from "../lib/Options"
+import { readStored, writeStored } from "../lib/Storage"
+import { usePreference } from "./usePreference"
+import { getSupport, voiceAvailable } from "../lib/support"
+import { useMicPermission } from "./useMicPermission"
+import { useSpeechRecognition } from "./useSpeechRecognition"
+import { useTextToSpeech } from "./useTextToSpeech"
+import { useAudioLevel } from "./useAudioLevel"
+import { countFillers } from "../lib/fillers"
+import { pickQuestions, getRecentQuestions, rememberQuestions } from "../lib/questions"
+import { evaluateSession, fetchUsage, generateQuestions, generateFollowUp } from "../lib/gemini"
+import { saveSession, newSessionId } from "../lib/history"
+import { findWeakestIndex } from "../lib/scores"
+import { messageForError } from "../lib/Errormessages"
+
 import {
   DEFAULT_LANG,
   DEFAULT_RATE,
