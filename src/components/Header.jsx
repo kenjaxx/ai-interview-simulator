@@ -16,7 +16,9 @@ export default function Header({ onHistory }) {
       <div className="app-header-user">
         <ThemeToggle />
         {onHistory && (
-          <button className="app-header-signout" onClick={onHistory}>History</button>
+          <button className="app-header-signout" onClick={onHistory}>
+            History
+          </button>
         )}
         {user.photoURL ? (
           <img
@@ -31,7 +33,9 @@ export default function Header({ onHistory }) {
           </span>
         )}
         <span className="app-header-name">{user.displayName || user.email}</span>
-        <button className="app-header-signout" onClick={signOutUser}>Sign out</button>
+        <button className="app-header-signout" onClick={signOutUser}>
+          Sign out
+        </button>
       </div>
     </header>
   )

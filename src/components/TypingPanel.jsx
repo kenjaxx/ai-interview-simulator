@@ -14,7 +14,9 @@ export default function TypingPanel({ onSubmit, maxLength = 4000, describedBy })
 
   return (
     <div className="typing-panel">
-      <label htmlFor="typed-answer" className="sr-only">Your answer</label>
+      <label htmlFor="typed-answer" className="sr-only">
+        Your answer
+      </label>
       <textarea
         id="typed-answer"
         value={text}

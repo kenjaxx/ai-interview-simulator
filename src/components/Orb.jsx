@@ -71,9 +71,13 @@ export default function Orb({ state, getLevel, subscribeWord }) {
 
 function labelFor(state) {
   switch (state) {
-    case "listening": return "Listening..."
-    case "thinking": return "Thinking..."
-    case "speaking": return "Speaking..."
-    default: return "Ready"
+    case "listening":
+      return "Listening..."
+    case "thinking":
+      return "Thinking..."
+    case "speaking":
+      return "Speaking..."
+    default:
+      return "Ready"
   }
 }

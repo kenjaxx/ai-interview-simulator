@@ -8,9 +8,7 @@ export default function ModeToggle({ mode, onChange, disabled = false, disabledR
   return (
     <div className="mode-toggle">
       <div>
-        <p className="mode-toggle-title">
-          {isFull ? "Full AI Mode" : "Practice Mode"}
-        </p>
+        <p className="mode-toggle-title">{isFull ? "Full AI Mode" : "Practice Mode"}</p>
         <p className="mode-toggle-sub">
           {disabled && disabledReason
             ? disabledReason

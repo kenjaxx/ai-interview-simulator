@@ -9,7 +9,9 @@
   width: 96px;
   height: 96px;
   border-radius: 50%;
-  transition: transform 0.15s ease-out, background 0.4s ease;
+  transition:
+    transform 0.15s ease-out,
+    background 0.4s ease;
   will-change: transform;
 }
 
@@ -31,8 +33,15 @@
 }
 
 @keyframes orb-think {
-  0%, 100% { opacity: 0.7; transform: scale(0.95); }
-  50% { opacity: 1; transform: scale(1.05); }
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(0.95);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
 }
 
 .orb-label {

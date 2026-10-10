@@ -81,7 +81,7 @@ const memoryStore = {
       return entry.count
     })
   },
-    async decr(keys) {
+  async decr(keys) {
     for (const key of keys) {
       const entry = memory.get(key)
       if (entry && entry.count > 0) entry.count--

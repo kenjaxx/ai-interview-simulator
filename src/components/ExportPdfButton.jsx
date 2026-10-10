@@ -1,7 +1,13 @@
 import { useState } from "react"
 
 // meta: { role, seniority, mode, date }
-export default function ExportPdfButton({ meta, overallSummary, session, retries, className = "secondary-btn" }) {
+export default function ExportPdfButton({
+  meta,
+  overallSummary,
+  session,
+  retries,
+  className = "secondary-btn",
+}) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
@@ -26,7 +32,11 @@ export default function ExportPdfButton({ meta, overallSummary, session, retries
       <button type="button" className={className} onClick={handleClick} disabled={busy}>
         {busy ? "Preparing PDF…" : "Export PDF"}
       </button>
-      {error && <p className="export-error" role="alert">{error}</p>}
+      {error && (
+        <p className="export-error" role="alert">
+          {error}
+        </p>
+      )}
     </span>
   )
 }

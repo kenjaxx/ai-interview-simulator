@@ -4,7 +4,10 @@
   color: var(--t-label);
 }
 
-.answer-mode { display: flex; gap: 8px; }
+.answer-mode {
+  display: flex;
+  gap: 8px;
+}
 .answer-mode-btn {
   flex: 1;
   padding: 10px 12px;
@@ -16,7 +19,10 @@
   cursor: pointer;
   transition: border-color 0.15s ease;
 }
-.answer-mode-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.answer-mode-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 .answer-mode-btn--on {
   border-color: var(--accent);
   color: var(--t-head);
@@ -29,5 +35,9 @@
   line-height: 1.45;
   color: var(--t-muted);
 }
-.mode-notice--warn { color: var(--warn); }
-.mode-notice--ok { color: var(--ok); }
+.mode-notice--warn {
+  color: var(--warn);
+}
+.mode-notice--ok {
+  color: var(--ok);
+}

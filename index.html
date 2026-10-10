@@ -28,18 +28,21 @@
 
     <script>
       // Sets the theme before first paint so there's no dark/light flash.
-      (function () {
-        var root = document.documentElement;
+      ;(function () {
+        var root = document.documentElement
         try {
-          var t = localStorage.getItem("interview-ai-theme");
+          var t = localStorage.getItem("interview-ai-theme")
           if (t !== "light" && t !== "dark") {
-            t = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+            t =
+              window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark"
           }
-          root.setAttribute("data-theme", t);
+          root.setAttribute("data-theme", t)
         } catch (e) {
-          root.setAttribute("data-theme", "dark");
+          root.setAttribute("data-theme", "dark")
         }
-      })();
+      })()
     </script>
   </head>
   <body>

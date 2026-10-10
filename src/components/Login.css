@@ -5,11 +5,14 @@
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
-  background:
-    radial-gradient(1200px 500px at 50% -10%, var(--app-glow), transparent 60%),
-    var(--app-bg);
+  background: radial-gradient(1200px 500px at 50% -10%, var(--app-glow), transparent 60%), var(--app-bg);
   color: var(--t-main);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
 }
 
 .login-theme {
@@ -31,8 +34,14 @@
 }
 
 @keyframes login-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .login-card .eyebrow {
@@ -74,10 +83,17 @@
   font-size: 14.5px;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.1s ease, box-shadow 0.15s ease;
+  transition:
+    transform 0.1s ease,
+    box-shadow 0.15s ease;
 }
-.google-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 24px -10px rgba(120, 90, 200, 0.45); }
-.google-btn:active { transform: translateY(0); }
+.google-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px -10px rgba(120, 90, 200, 0.45);
+}
+.google-btn:active {
+  transform: translateY(0);
+}
 
 .login-error {
   margin-top: 1rem;

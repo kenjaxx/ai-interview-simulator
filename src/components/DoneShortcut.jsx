@@ -17,7 +17,8 @@ export default function DoneShortcut({ onDone }) {
       const el = event.target
       if (
         el instanceof HTMLElement &&
-        (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "A", "SUMMARY"].includes(el.tagName))
+        (el.isContentEditable ||
+          ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "A", "SUMMARY"].includes(el.tagName))
       ) {
         return
       }

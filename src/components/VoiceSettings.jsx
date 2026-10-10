@@ -47,9 +47,7 @@ export default function VoiceSettings({
 
   const english = voices.filter((v) => normLang(v.lang).startsWith("en"))
   const matching = voicesForAccent(voices, lang)
-  const others = english
-    .filter((v) => !matching.includes(v))
-    .sort((a, b) => a.name.localeCompare(b.name))
+  const others = english.filter((v) => !matching.includes(v)).sort((a, b) => a.name.localeCompare(b.name))
   const selected = english.some((v) => v.voiceURI === voiceURI) ? voiceURI : ""
   const autoVoice = bestVoiceForAccent(voices, lang)
   const currentAccent = ACCENTS.find((a) => a.code === lang)
@@ -62,10 +60,12 @@ export default function VoiceSettings({
       </summary>
 
       <div className="field">
-        <span className="field-label" id="accent-label">Your accent</span>
+        <span className="field-label" id="accent-label">
+          Your accent
+        </span>
         <p className="mode-notice" style={{ marginTop: 0 }}>
-          Used for speech recognition and for the interviewer's voice. Press ▶ to hear each one.
-          Which voices exist depends on your device and browser.
+          Used for speech recognition and for the interviewer's voice. Press ▶ to hear each one. Which voices
+          exist depends on your device and browser.
         </p>
 
         <div className="accent-list" role="radiogroup" aria-labelledby="accent-label">
@@ -118,8 +118,8 @@ export default function VoiceSettings({
 
         {!support.recognition && (
           <p className="mode-notice">
-            Speech recognition isn't available in this browser, so the accent only changes the
-            interviewer's voice here. Typing works as normal.
+            Speech recognition isn't available in this browser, so the accent only changes the interviewer's
+            voice here. Typing works as normal.
           </p>
         )}
       </div>
@@ -135,14 +135,18 @@ export default function VoiceSettings({
               {matching.length > 0 && (
                 <optgroup label="Matches your accent">
                   {matching.map((v) => (
-                    <option key={v.voiceURI} value={v.voiceURI}>{v.name} ({v.lang})</option>
+                    <option key={v.voiceURI} value={v.voiceURI}>
+                      {v.name} ({v.lang})
+                    </option>
                   ))}
                 </optgroup>
               )}
               {others.length > 0 && (
                 <optgroup label="Other English voices">
                   {others.map((v) => (
-                    <option key={v.voiceURI} value={v.voiceURI}>{v.name} ({v.lang})</option>
+                    <option key={v.voiceURI} value={v.voiceURI}>
+                      {v.name} ({v.lang})
+                    </option>
                   ))}
                 </optgroup>
               )}

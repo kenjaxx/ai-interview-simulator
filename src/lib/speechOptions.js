@@ -20,8 +20,7 @@ export const RATE_MAX = 1.5
 export const RATE_STEP = 0.1
 export const DEFAULT_RATE = 1
 
-export const PREVIEW_TEXT =
-  "Hello, I'll be your interviewer today. Tell me about a project you're proud of."
+export const PREVIEW_TEXT = "Hello, I'll be your interviewer today. Tell me about a project you're proud of."
 
 // Android reports "en_GB", desktop browsers report "en-GB". Compare them in one form.
 export const normLang = (lang = "") => lang.toLowerCase().replace(/_/g, "-")

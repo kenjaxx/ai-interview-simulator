@@ -11,7 +11,9 @@ a:focus-visible {
 }
 
 /* Headings that receive focus on screen change are not interactive, so no ring. */
-[data-screen-heading]:focus { outline: none; }
+[data-screen-heading]:focus {
+  outline: none;
+}
 
 /* ---------- Setup: collapsed sections ---------- */
 
@@ -30,8 +32,17 @@ a:focus-visible {
   font-weight: 600;
   color: var(--t-head);
 }
-.privacy-details > summary { font-size: 13px; font-weight: 500; color: var(--t-muted); }
-.privacy-details p { margin: 10px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--t-faint); }
+.privacy-details > summary {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--t-muted);
+}
+.privacy-details p {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--t-faint);
+}
 
 .advanced-sub {
   display: block;
@@ -56,7 +67,9 @@ a:focus-visible {
   font-variant-numeric: tabular-nums;
   color: var(--t-muted);
 }
-.answer-timer--long { color: var(--warn); }
+.answer-timer--long {
+  color: var(--warn);
+}
 
 .shortcut-hint,
 .typing-hint {
@@ -74,7 +87,9 @@ a:focus-visible {
   font-size: 12px;
 }
 
-.typing-hint { align-self: flex-end; }
+.typing-hint {
+  align-self: flex-end;
+}
 
 /* ---------- Quota meter ---------- */
 

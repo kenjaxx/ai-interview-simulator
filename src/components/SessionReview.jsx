@@ -24,9 +24,18 @@ export default function SessionReview({ session, retries = {}, sessionMode }) {
       <ScoreHelp />
 
       <div className="score-row">
-        <div className="score-card"><span>{avg.content}</span><label>Content</label></div>
-        <div className="score-card"><span>{avg.clarity}</span><label>Clarity</label></div>
-        <div className="score-card"><span>{avg.confidence}</span><label>Confidence</label></div>
+        <div className="score-card">
+          <span>{avg.content}</span>
+          <label>Content</label>
+        </div>
+        <div className="score-card">
+          <span>{avg.clarity}</span>
+          <label>Clarity</label>
+        </div>
+        <div className="score-card">
+          <span>{avg.confidence}</span>
+          <label>Confidence</label>
+        </div>
       </div>
 
       {session.map((entry, i) => (
@@ -42,17 +51,24 @@ function ScoreHelp() {
     <details className="score-help">
       <summary>How is this scored?</summary>
       <ul>
-        <li><strong>Content</strong>: how relevant, deep and specific your answer is.</li>
-        <li><strong>Clarity</strong>: how well structured it is, plus your speaking pace for voice answers.</li>
-        <li><strong>Confidence</strong>: filler words, how soon you started talking, and how decisive your wording is.</li>
+        <li>
+          <strong>Content</strong>: how relevant, deep and specific your answer is.
+        </li>
+        <li>
+          <strong>Clarity</strong>: how well structured it is, plus your speaking pace for voice answers.
+        </li>
+        <li>
+          <strong>Confidence</strong>: filler words, how soon you started talking, and how decisive your
+          wording is.
+        </li>
       </ul>
       <p>
-        <strong>Full AI Mode</strong> sends your answers to Gemini, which reads each one against a rubric
-        and writes the feedback, STAR check and sample answer.
+        <strong>Full AI Mode</strong> sends your answers to Gemini, which reads each one against a rubric and
+        writes the feedback, STAR check and sample answer.
       </p>
       <p>
-        <strong>Practice Mode</strong> scores locally from simple signals: answer length, pace, filler
-        words and delay. It judges delivery, not whether your answer is actually good.
+        <strong>Practice Mode</strong> scores locally from simple signals: answer length, pace, filler words
+        and delay. It judges delivery, not whether your answer is actually good.
       </p>
       <p>
         Treat scores as a guide. The same answer can score a few points differently from one run to the next.
@@ -71,7 +87,9 @@ function HighlightedAnswer({ text, showNote = false }) {
       <p className="review-answer">
         {parts.map((p, i) =>
           p.filler ? (
-            <mark key={i} className="filler-mark" title="Possible filler word">{p.text}</mark>
+            <mark key={i} className="filler-mark" title="Possible filler word">
+              {p.text}
+            </mark>
           ) : (
             <span key={i}>{p.text}</span>
           )
@@ -122,14 +140,21 @@ function RetryComparison({ original, retry, sameMode }) {
       </p>
       {!sameMode && (
         <p className="retry-compare-note">
-          The retry was scored in a different mode than the original, so the numbers aren't directly comparable.
+          The retry was scored in a different mode than the original, so the numbers aren't directly
+          comparable.
         </p>
       )}
       <HighlightedAnswer text={retry.answer} />
       <ul className="chip-row" aria-label="Scores for the retry">
-        <li className="chip chip--score">Content <strong>{evaluation.contentScore}</strong></li>
-        <li className="chip chip--score">Clarity <strong>{evaluation.clarityScore}</strong></li>
-        <li className="chip chip--score">Confidence <strong>{evaluation.confidenceScore}</strong></li>
+        <li className="chip chip--score">
+          Content <strong>{evaluation.contentScore}</strong>
+        </li>
+        <li className="chip chip--score">
+          Clarity <strong>{evaluation.clarityScore}</strong>
+        </li>
+        <li className="chip chip--score">
+          Confidence <strong>{evaluation.confidenceScore}</strong>
+        </li>
       </ul>
       <StarRow star={evaluation.star} />
       <p className="review-feedback">{evaluation.feedback}</p>
@@ -152,9 +177,15 @@ function ReviewCard({ entry, index, retry, sessionMode }) {
       <HighlightedAnswer text={entry.answer} showNote />
 
       <ul className="chip-row" aria-label="Scores for this answer">
-        <li className="chip chip--score">Content <strong>{evaluation.contentScore}</strong></li>
-        <li className="chip chip--score">Clarity <strong>{evaluation.clarityScore}</strong></li>
-        <li className="chip chip--score">Confidence <strong>{evaluation.confidenceScore}</strong></li>
+        <li className="chip chip--score">
+          Content <strong>{evaluation.contentScore}</strong>
+        </li>
+        <li className="chip chip--score">
+          Clarity <strong>{evaluation.clarityScore}</strong>
+        </li>
+        <li className="chip chip--score">
+          Confidence <strong>{evaluation.confidenceScore}</strong>
+        </li>
       </ul>
 
       <ul className="chip-row" aria-label="Speech measurements for this answer">
@@ -162,9 +193,15 @@ function ReviewCard({ entry, index, retry, sessionMode }) {
           <li className="chip">Typed answer (no speech metrics)</li>
         ) : (
           <>
-            <li className="chip">Pace <strong>{metrics.wpm ?? 0}</strong> wpm</li>
-            <li className="chip">Fillers <strong>{metrics.fillerCount ?? 0}</strong></li>
-            <li className="chip">Started after <strong>{metrics.responseDelaySec ?? 0}s</strong></li>
+            <li className="chip">
+              Pace <strong>{metrics.wpm ?? 0}</strong> wpm
+            </li>
+            <li className="chip">
+              Fillers <strong>{metrics.fillerCount ?? 0}</strong>
+            </li>
+            <li className="chip">
+              Started after <strong>{metrics.responseDelaySec ?? 0}s</strong>
+            </li>
           </>
         )}
       </ul>
@@ -182,7 +219,11 @@ function ReviewCard({ entry, index, retry, sessionMode }) {
       )}
 
       {retry && (
-        <RetryComparison original={entry} retry={retry} sameMode={!sessionMode || retry.mode === sessionMode} />
+        <RetryComparison
+          original={entry}
+          retry={retry}
+          sameMode={!sessionMode || retry.mode === sessionMode}
+        />
       )}
     </div>
   )

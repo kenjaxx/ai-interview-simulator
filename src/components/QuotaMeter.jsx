@@ -11,14 +11,20 @@ export default function QuotaMeter({ quota, status, onRefresh }) {
         <div className="quota-meter quota-meter--muted" role="status">
           <p>
             Couldn't check your AI quota.{" "}
-            <button type="button" className="link-btn" onClick={onRefresh}>Retry</button>
+            <button type="button" className="link-btn" onClick={onRefresh}>
+              Retry
+            </button>
           </p>
           {reason && <p className="quota-reason">{reason}</p>}
         </div>
       )
     }
     if (status === "loading") {
-      return <p className="quota-meter quota-meter--muted" role="status">Checking your AI quota…</p>
+      return (
+        <p className="quota-meter quota-meter--muted" role="status">
+          Checking your AI quota…
+        </p>
+      )
     }
     return null
   }

@@ -1,182 +1,12 @@
-import { auth, getAppCheckToken } from "./firebase"
 import { messageForError } from "./Errormessages"
+import { callBackend } from "./backend"
+import { mockDelay, mockEvaluation } from "./mockEvaluation"
+
+export { GeminiApiError } from "./apiError"
 
 // Set VITE_MOCK_AI=true in your .env to bypass the backend entirely during
 // UI/dev work: zero quota spent, instant fake responses.
 const MOCK_MODE = import.meta.env.VITE_MOCK_AI === "true"
-
-export class GeminiApiError extends Error {
-  constructor(
-    message,
-    { status, isQuotaError = false, isDailyQuota = false, retryAfterSeconds = null, limitScope = null } = {}
-  ) {
-    super(message)
-    this.name = "GeminiApiError"
-    this.status = status
-    this.isQuotaError = isQuotaError
-    this.isDailyQuota = isDailyQuota
-    this.retryAfterSeconds = retryAfterSeconds
-    // Who ran out: "user" (your personal allowance), "global" (the whole app's budget),
-    // or "provider" (Gemini itself is rate-limiting).
-    this.limitScope = limitScope
-  }
-}
-
-// Slightly longer than the server's own time budget (about 52s, including a retry) so the
-// server's error wins the race.
-const REQUEST_TIMEOUT_MS = 60_000
-
-// ---------- Backend call (Vercel serverless function) ----------
-
-// isValid(body) checks the response has the shape the caller expects.
-async function callBackend(payload, isValid) {
-  const user = auth.currentUser
-  if (!user) throw new GeminiApiError("You must be signed in.", { status: 401 })
-
-  const [idToken, appCheckToken] = await Promise.all([user.getIdToken(), getAppCheckToken()])
-
-  const headers = {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${idToken}`,
-  }
-  if (appCheckToken) headers["X-Firebase-AppCheck"] = appCheckToken
-
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
-
-  let res
-  try {
-    res = await fetch("/api/evaluate", {
-      method: "POST",
-      signal: controller.signal,
-      headers,
-      body: JSON.stringify(payload),
-    })
-  } catch (err) {
-    if (err.name === "AbortError") {
-      throw new GeminiApiError("The AI took too long to respond. Please retry.", { status: 504 })
-    }
-    throw new GeminiApiError("Couldn't reach the interviewer AI.", { status: 0 })
-  } finally {
-    clearTimeout(timer)
-  }
-
-  let body = null
-  try {
-    body = await res.json()
-  } catch {
-    /* not JSON, ignore */
-  }
-
-  if (!res.ok) {
-    if (res.status === 429) {
-      throw new GeminiApiError(body?.error || "Rate limited.", {
-        status: 429,
-        isQuotaError: true,
-        isDailyQuota: !!body?.isDailyQuota,
-        retryAfterSeconds: body?.retryAfterSeconds ?? null,
-        limitScope: body?.limitScope ?? null,
-      })
-    }
-
-    // No JSON body means the request never reached our handler code: the route doesn't exist
-    // (plain `vite` doesn't serve /api) or the function crashed while loading.
-    if (!body) {
-      console.error(`/api/evaluate returned HTTP ${res.status} with no JSON body. Check the function logs.`)
-      if (import.meta.env.DEV && res.status === 404) {
-        throw new GeminiApiError(
-          "The /api/evaluate endpoint wasn't found. Run the app with `vercel dev` (plain `vite` doesn't serve /api), or set VITE_MOCK_AI=true in .env.",
-          { status: 404 }
-        )
-      }
-      throw new GeminiApiError("The server had a problem. Please try again in a moment.", { status: res.status })
-    }
-
-    throw new GeminiApiError(body?.error || "Couldn't reach the interviewer AI.", { status: res.status })
-  }
-
-  if (!body || !isValid(body)) {
-    throw new GeminiApiError("The server returned an unexpected response.", { status: res.status })
-  }
-
-  return body
-}
-
-// ---------- Mock helpers (used only for Practice Mode / MOCK_MODE) ----------
-
-function mockDelay(ms = 600) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-function clamp(n, min, max) {
-  return Math.max(min, Math.min(max, n))
-}
-
-// Heuristic, metrics-based evaluation for a single Q&A, with no real AI judgment.
-function mockEvaluation(answer = "", metrics = {}, inputMethod = "voice") {
-  const typed = inputMethod === "text"
-  const { fillerCount = 0, wpm = 0, responseDelaySec = 0 } = metrics
-  const wordCount = answer.trim() ? answer.trim().split(/\s+/).length : 0
-
-  let confidenceScore = 90
-  confidenceScore -= fillerCount * 4
-  if (!typed) {
-    confidenceScore -= Math.max(0, responseDelaySec - 3) * 2
-    if (wpm > 0 && (wpm < 90 || wpm > 190)) confidenceScore -= 10
-  }
-  confidenceScore = clamp(Math.round(confidenceScore), 30, 98)
-
-  let clarityScore = 88
-  if (!typed && wpm > 0) {
-    const distanceFromIdeal = Math.abs(wpm - 140)
-    clarityScore -= Math.round(distanceFromIdeal / 5)
-  }
-  clarityScore -= Math.floor(fillerCount / 2)
-  clarityScore = clamp(clarityScore, 30, 97)
-
-  let contentScore = 60
-  if (wordCount >= 25) contentScore = 78
-  if (wordCount >= 60) contentScore = 88
-  if (wordCount < 10) contentScore = 45
-  contentScore = clamp(contentScore, 20, 95)
-
-  const scores = { content: contentScore, clarity: clarityScore, confidence: confidenceScore }
-  const weakest = Object.entries(scores).sort((a, b) => a[1] - b[1])[0][0]
-
-  const feedbackByArea = {
-    content: `(Mock feedback) You gave a ${wordCount}-word answer — a bit more detail or a concrete example would strengthen it.`,
-    clarity: typed
-      ? "(Mock feedback) Shorter, more direct sentences would make your typed answer easier to follow."
-      : `(Mock feedback) Your pace was around ${wpm || "an unmeasured"} wpm — aim for a steady, conversational rhythm to sound clearer.`,
-    confidence:
-      fillerCount > 0
-        ? `(Mock feedback) You used ${fillerCount} filler word${fillerCount === 1 ? "" : "s"} (um/uh/like/kind of) — cutting those down will sound more confident.`
-        : typed
-          ? "(Mock feedback) Your typed answer reads steadily — avoid hedging phrases to sound even more decisive."
-          : `(Mock feedback) Watch your response delay (${responseDelaySec}s before you started) — jumping in sooner reads as more confident.`,
-  }
-
-  const tipByArea = {
-    content: "(Mock tip) Structure your answer with a brief example: situation, action, result.",
-    clarity: typed
-      ? "(Mock tip) Lead with the outcome, then give the context."
-      : "(Mock tip) Practice saying your answer at a steady pace — not rushed, not dragging.",
-    confidence: "(Mock tip) Pause silently instead of using filler words when you need a moment to think.",
-  }
-
-  return {
-    contentScore,
-    clarityScore,
-    confidenceScore,
-    feedback: feedbackByArea[weakest],
-    improvementTip: tipByArea[weakest],
-    // STAR analysis and sample answers need real AI, so Practice Mode leaves them empty.
-    star: null,
-    strongAnswer: "",
-  }
-}
-
-// ---------- Public API ----------
 
 // Scores a set of Q&As in one call: a whole interview, or a single retried answer.
 // Practice Mode is scored locally; Full AI Mode goes through /api/evaluate,
@@ -233,7 +63,7 @@ export function getUsageError() {
 }
 
 // Worth one more try: the request never arrived, or the server hiccuped.
-const isTransient = (err) => err instanceof GeminiApiError && (err.status === 0 || err.status >= 500)
+const isTransient = (err) => err && (err.status === 0 || err.status >= 500)
 
 const usageIsValid = (b) => typeof b?.usage?.remaining === "number" && typeof b?.usage?.limit === "number"
 
@@ -265,13 +95,15 @@ export async function generateQuestions({ role, seniority, jobDescription, count
   if (MOCK_MODE) {
     await mockDelay()
     return {
-      questions: Array.from({ length: count }, (_, i) => `(Mock) Tailored question ${i + 1} for a ${seniority} ${role}.`),
+      questions: Array.from(
+        { length: count },
+        (_, i) => `(Mock) Tailored question ${i + 1} for a ${seniority} ${role}.`
+      ),
       usage: null,
     }
   }
-  const body = await callBackend(
-    { action: "questions", role, seniority, jobDescription, count },
-    (b) => Array.isArray(b.questions)
+  const body = await callBackend({ action: "questions", role, seniority, jobDescription, count }, (b) =>
+    Array.isArray(b.questions)
   )
   return { questions: body.questions, usage: body.usage ?? null }
 }

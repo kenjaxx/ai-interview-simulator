@@ -48,16 +48,16 @@ function withTimeout(promise, ms) {
 export async function saveSession(uid, sessionId, { role, seniority, mode, overallSummary, session }) {
   // Firestore rejects `undefined`, so every field is given an explicit value.
   const qas = session.map((entry) => ({
-  question: entry.question,
-  answer: entry.answer,
-  inputMethod: entry.inputMethod || "voice",
-  isFollowUp: !!entry.isFollowUp,
+    question: entry.question,
+    answer: entry.answer,
+    inputMethod: entry.inputMethod || "voice",
+    isFollowUp: !!entry.isFollowUp,
     metrics: {
       wpm: entry.metrics?.wpm ?? 0,
       fillerCount: entry.metrics?.fillerCount ?? 0,
       responseDelaySec: entry.metrics?.responseDelaySec ?? 0,
     },
-        evaluation: {
+    evaluation: {
       contentScore: entry.evaluation.contentScore,
       clarityScore: entry.evaluation.clarityScore,
       confidenceScore: entry.evaluation.confidenceScore,
@@ -128,7 +128,7 @@ export async function loadHistoryPage(uid, { refresh = false } = {}) {
 
   const entry = {
     sessions: [...(previous?.sessions || []), ...snap.docs.map(toSession)],
-    lastDoc: snap.docs.length ? snap.docs[snap.docs.length - 1] : previous?.lastDoc ?? null,
+    lastDoc: snap.docs.length ? snap.docs[snap.docs.length - 1] : (previous?.lastDoc ?? null),
     hasMore: snap.docs.length === HISTORY_PAGE_SIZE,
   }
   cache.set(uid, entry)

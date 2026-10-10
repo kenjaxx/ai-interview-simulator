@@ -12,16 +12,61 @@
 
 // Words that make "kind of" / "sort of" a real noun phrase ("what kind of", "a sort of"...).
 const KIND_SORT_EXCLUDED_AFTER = new Set([
-  "a", "an", "the", "what", "which", "this", "that", "these", "those", "any", "some", "every",
-  "each", "same", "another", "other", "different", "one", "no", "whatever", "all", "such",
-  "certain", "particular", "special", "new", "what's", "whats",
+  "a",
+  "an",
+  "the",
+  "what",
+  "which",
+  "this",
+  "that",
+  "these",
+  "those",
+  "any",
+  "some",
+  "every",
+  "each",
+  "same",
+  "another",
+  "other",
+  "different",
+  "one",
+  "no",
+  "whatever",
+  "all",
+  "such",
+  "certain",
+  "particular",
+  "special",
+  "new",
+  "what's",
+  "whats",
 ])
 
 // "like" is legitimate after these ("I would like", "looks like", "feels like"...).
 const LIKE_EXCLUDED_AFTER = new Set([
-  "would", "i'd", "you'd", "we'd", "they'd", "he'd", "she'd",
-  "look", "looks", "looked", "feel", "feels", "felt", "seem", "seems",
-  "sound", "sounds", "something", "anything", "nothing", "much", "such", "unlike",
+  "would",
+  "i'd",
+  "you'd",
+  "we'd",
+  "they'd",
+  "he'd",
+  "she'd",
+  "look",
+  "looks",
+  "looked",
+  "feel",
+  "feels",
+  "felt",
+  "seem",
+  "seems",
+  "sound",
+  "sounds",
+  "something",
+  "anything",
+  "nothing",
+  "much",
+  "such",
+  "unlike",
 ])
 
 const FILLER_RULES = [
@@ -115,4 +160,4 @@ export function splitByFillers(text) {
   }
   if (cursor < value.length) parts.push({ text: value.slice(cursor), filler: false })
   return parts
-} 
+}

@@ -25,7 +25,10 @@ function clean(text) {
 }
 
 const slug = (s) =>
-  String(s || "session").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
+  String(s || "session")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
 
 const asDate = (d) => (d instanceof Date && !Number.isNaN(d.getTime()) ? d : new Date())
 
@@ -35,7 +38,15 @@ function yn(v) {
 
 // session: [{ question, answer, inputMethod, isFollowUp, metrics, evaluation }]
 // retries: { [answerIndex]: { answer, evaluation, mode } }  (optional)
-export async function exportSessionPdf({ role, seniority, mode, date, overallSummary, session, retries = {} }) {
+export async function exportSessionPdf({
+  role,
+  seniority,
+  mode,
+  date,
+  overallSummary,
+  session,
+  retries = {},
+}) {
   const { jsPDF } = await import("jspdf")
   const doc = new jsPDF({ unit: "pt", format: "a4" })
   const pageW = doc.internal.pageSize.getWidth()

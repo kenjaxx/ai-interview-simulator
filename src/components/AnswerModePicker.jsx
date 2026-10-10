@@ -9,7 +9,9 @@ export default function AnswerModePicker({ value, onChange, support, mic }) {
 
   return (
     <div className="field">
-      <span className="field-label" id="answer-mode-label">Answer by</span>
+      <span className="field-label" id="answer-mode-label">
+        Answer by
+      </span>
 
       <div className="answer-mode" role="radiogroup" aria-labelledby="answer-mode-label">
         <button
@@ -35,17 +37,20 @@ export default function AnswerModePicker({ value, onChange, support, mic }) {
 
       {!support.recognition && (
         <p className="mode-notice mode-notice--warn" role="status">
-          This browser doesn't support speech recognition. Use Chrome or Edge for voice answers, or type your answers.
+          This browser doesn't support speech recognition. Use Chrome or Edge for voice answers, or type your
+          answers.
         </p>
       )}
       {support.recognition && !support.mic && (
         <p className="mode-notice mode-notice--warn" role="status">
-          This browser can't access a microphone here (this usually needs a secure https page). You can type your answers instead.
+          This browser can't access a microphone here (this usually needs a secure https page). You can type
+          your answers instead.
         </p>
       )}
       {support.recognition && support.mic && mic.state === "denied" && (
         <p className="mode-notice mode-notice--warn" role="status">
-          Microphone access is blocked for this site. Allow it from the lock icon in the address bar, or type your answers.
+          Microphone access is blocked for this site. Allow it from the lock icon in the address bar, or type
+          your answers.
         </p>
       )}
       {support.recognition && support.mic && mic.state === "missing" && (
@@ -54,7 +59,9 @@ export default function AnswerModePicker({ value, onChange, support, mic }) {
         </p>
       )}
       {voiceOk && mic.state === "granted" && (
-        <p className="mode-notice mode-notice--ok" role="status">Microphone ready.</p>
+        <p className="mode-notice mode-notice--ok" role="status">
+          Microphone ready.
+        </p>
       )}
       {voiceOk && mic.state !== "granted" && (
         <div className="mode-notice">
