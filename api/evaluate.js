@@ -7,7 +7,6 @@ export const config = { maxDuration: 60 }
 const PROJECT_ID = process.env.FIREBASE_PROJECT_ID
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 
-
 // Firebase App Check. FIREBASE_PROJECT_NUMBER is the numeric "Project number" in Firebase project
 // settings (it's the same value as the web app's messagingSenderId).
 // Set APP_CHECK_ENFORCE=true to reject requests without a valid token. Until then the server runs in
@@ -50,7 +49,6 @@ const MAX_GENERATED_QUESTION_CHARS = 300
 const MAX_FEEDBACK_CHARS = 1000
 const MAX_TIP_CHARS = 500
 const MAX_STRONG_ANSWER_CHARS = 1500
-
 
 // Follow-up question generation. Keep in step with src/hooks/useInterview.js.
 const MAX_FOLLOWUP_CHARS = 300
@@ -155,10 +153,10 @@ function validateEvaluateInput(body) {
   }
 
   const cleanQas = qas.map((qa) => ({
-  question: clampText(qa?.question, MAX_QUESTION_CHARS),
-  answer: clampText(qa?.answer, MAX_ANSWER_CHARS),
-  inputMethod: qa?.inputMethod === "text" ? "text" : "voice",
-  isFollowUp: qa?.isFollowUp === true,
+    question: clampText(qa?.question, MAX_QUESTION_CHARS),
+    answer: clampText(qa?.answer, MAX_ANSWER_CHARS),
+    inputMethod: qa?.inputMethod === "text" ? "text" : "voice",
+    isFollowUp: qa?.isFollowUp === true,
     metrics: {
       fillerCount: Math.round(clampNumber(qa?.metrics?.fillerCount, 0, 1000)),
       wpm: Math.round(clampNumber(qa?.metrics?.wpm, 0, 600)),
@@ -363,7 +361,6 @@ function buildQuestionsSchema(count) {
     propertyOrdering: ["questions"],
   }
 }
-
 
 // ---------- prompts and schemas: follow-up question ----------
 
@@ -636,23 +633,42 @@ export default async function handler(req, res) {
     }
 
     // Tailored questions from a pasted job description. Costs one evaluation.
+    if (action === "questions") {
+      const input = validateQuestionsInput(req.body)
+      reservation = await reserveRequest(uid)
+
+      const rawText = await callGemini(
+        buildQuestionsSystemPrompt(input),
+        buildQuestionsUserPrompt(input),
+        buildQuestionsSchema(input.count),
+        0.7
+      )
+      const questions = parseQuestions(rawText, input.count)
+
+      return res.status(200).json({
+        questions,
+        usage: { remaining: reservation.remaining, limit: reservation.limit },
+      })
+    }
+
+    // One probing follow-up question for a single answer. Costs one evaluation.
     if (action === "followup") {
-  const input = validateFollowUpInput(req.body)
-  reservation = await reserveRequest(uid)
+      const input = validateFollowUpInput(req.body)
+      reservation = await reserveRequest(uid)
 
-  const rawText = await callGemini(
-    buildFollowUpSystemPrompt(input),
-    buildFollowUpUserPrompt(input),
-    buildFollowUpSchema(),
-    0.7
-  )
-  const question = parseFollowUp(rawText)
+      const rawText = await callGemini(
+        buildFollowUpSystemPrompt(input),
+        buildFollowUpUserPrompt(input),
+        buildFollowUpSchema(),
+        0.7
+      )
+      const question = parseFollowUp(rawText)
 
-  return res.status(200).json({
-    question,
-    usage: { remaining: reservation.remaining, limit: reservation.limit },
-  })
-}
+      return res.status(200).json({
+        question,
+        usage: { remaining: reservation.remaining, limit: reservation.limit },
+      })
+    }
 
     // Default: score a set of answers (a whole interview, or a single retried answer).
     const { role, seniority, qas } = validateEvaluateInput(req.body)

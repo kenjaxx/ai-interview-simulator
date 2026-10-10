@@ -33,7 +33,7 @@ const RAPID_RESTART_WINDOW_MS = 1000
 // Very short answers would produce absurd WPM (8 words in 0.5s = 960), so never divide by less than this.
 const MIN_SPEAKING_SEC = 2
 
-// startListening({ promptShownAt, onFinal, onEmpty, onError })
+// startListening({ promptShownAt, lang, onFinal, onEmpty, onError })
 //   onFinal(text, { wpm, fillerCount, responseDelaySec }) - user finished with a non-empty answer
 //   onEmpty()                                            - user finished but nothing was captured
 //   onError(message)                                     - mic blocked, unsupported, repeated failures
@@ -243,20 +243,20 @@ export function useSpeechRecognition() {
     recognition.start()
   }, [armBackstop, fail, finalize, setTranscript])
 
- const startListening = useCallback(({ promptShownAt, onFinal, onEmpty, onError, lang } = {}) => {
-  if (!getSpeechRecognition()) {
-    onError?.("Speech recognition isn't supported in this browser. Try Chrome or Edge.")
-    return
-  }
+  const startListening = useCallback(({ promptShownAt, onFinal, onEmpty, onError, lang } = {}) => {
+    if (!getSpeechRecognition()) {
+      onError?.("Speech recognition isn't supported in this browser. Try Chrome or Edge.")
+      return
+    }
 
-  // Fully retire any previous session before starting a new one
-  clearTimers()
-  retire(recognitionRef.current)
-  recognitionRef.current = null
+    // Fully retire any previous session before starting a new one.
+    clearTimers()
+    retire(recognitionRef.current)
+    recognitionRef.current = null
 
-  langRef.current = lang || "en-US"
-  const sessionId = ++sessionIdRef.current
-  // ...the rest is unchanged
+    langRef.current = lang || "en-US"
+    const sessionId = ++sessionIdRef.current
+
     onFinalRef.current = onFinal || null
     onEmptyRef.current = onEmpty || null
     onErrorRef.current = onError || null

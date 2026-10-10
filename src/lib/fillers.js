@@ -5,10 +5,24 @@
 // "sentence start" rule would almost never match. That's why most rules here avoid depending on
 // punctuation and use low weights or a small exclusion list instead. "right?" only matches when
 // a question mark is actually present (typed answers, or recognizers that add punctuation).
+//
+// Regex lookbehind is deliberately NOT used: older Safari (before 16.4) throws a SyntaxError for it
+// when the module loads, which would crash the whole app. Rules that need "not preceded by X" use a
+// `notAfter` set instead, checked by hand in findMatches().
 
 // Words that make "kind of" / "sort of" a real noun phrase ("what kind of", "a sort of"...).
-const KIND_SORT_EXCLUDED_AFTER =
-  "a|an|the|what|which|this|that|these|those|any|some|every|each|same|another|other|different|one|no|whatever|all|such|certain|particular|special|new|what's|whats"
+const KIND_SORT_EXCLUDED_AFTER = new Set([
+  "a", "an", "the", "what", "which", "this", "that", "these", "those", "any", "some", "every",
+  "each", "same", "another", "other", "different", "one", "no", "whatever", "all", "such",
+  "certain", "particular", "special", "new", "what's", "whats",
+])
+
+// "like" is legitimate after these ("I would like", "looks like", "feels like"...).
+const LIKE_EXCLUDED_AFTER = new Set([
+  "would", "i'd", "you'd", "we'd", "they'd", "he'd", "she'd",
+  "look", "looks", "looked", "feel", "feels", "felt", "seem", "seems",
+  "sound", "sounds", "something", "anything", "nothing", "much", "such", "unlike",
+])
 
 const FILLER_RULES = [
   // Nearly always a filler.
@@ -19,22 +33,30 @@ const FILLER_RULES = [
   // Hedges that stall or soften.
   { pattern: /\bi mean\b/g, weight: 0.5 },
   { pattern: /\b(?:kinda|sorta)\b/g, weight: 0.5 },
-  {
-    pattern: new RegExp(`(?<!\\b(?:${KIND_SORT_EXCLUDED_AFTER})\\s)\\b(?:kind|sort) of\\b`, "g"),
-    weight: 0.5,
-  },
+  { pattern: /\b(?:kind|sort) of\b/g, weight: 0.5, notAfter: KIND_SORT_EXCLUDED_AFTER },
   { pattern: /\bright\s*\?/g, weight: 0.5 },
   { pattern: /\b(?:or something|or whatever|and stuff)\b/g, weight: 0.25 },
   { pattern: /\bi guess\b/g, weight: 0.25 },
-  // "like" is legitimate after these ("I would like", "looks like", "feels like"...).
-  {
-    pattern:
-      /(?<!\b(?:would|i'd|you'd|we'd|they'd|he'd|she'd|look|looks|looked|feel|feels|felt|seem|seems|sound|sounds|something|anything|nothing|much|such|unlike)\s)\blike\b/g,
-    weight: 0.25,
-  },
+  { pattern: /\blike\b/g, weight: 0.25, notAfter: LIKE_EXCLUDED_AFTER },
   // "so" only counts when it opens the answer or a sentence, where it's usually a stall word.
   { pattern: /(?:^|[.!?]\s+)so\b/g, weight: 0.5 },
 ]
+
+// The word right before position `index`, if it is separated from it by whitespace. Else "".
+function wordBefore(lower, index) {
+  const match = lower.slice(0, index).match(/([a-z0-9']+)\s$/)
+  return match ? match[1] : ""
+}
+
+// All matches of one rule, minus the ones that follow an excluded word.
+function findMatches(rule, lower) {
+  const matches = []
+  for (const match of lower.matchAll(rule.pattern)) {
+    if (rule.notAfter && rule.notAfter.has(wordBefore(lower, match.index))) continue
+    matches.push(match)
+  }
+  return matches
+}
 
 // Returns a weighted filler count, rounded to a whole number.
 export function countFillers(text) {
@@ -42,9 +64,8 @@ export function countFillers(text) {
   const lower = text.toLowerCase()
 
   let total = 0
-  for (const { pattern, weight } of FILLER_RULES) {
-    const matches = lower.match(pattern)
-    if (matches) total += matches.length * weight
+  for (const rule of FILLER_RULES) {
+    total += findMatches(rule, lower).length * rule.weight
   }
   return Math.round(total)
 }
@@ -59,8 +80,8 @@ export function findFillers(text) {
   if (lower.length !== text.length) return []
 
   const ranges = []
-  for (const { pattern } of FILLER_RULES) {
-    for (const match of lower.matchAll(pattern)) {
+  for (const rule of FILLER_RULES) {
+    for (const match of findMatches(rule, lower)) {
       // The "so" rule also matches the punctuation and space before it. Don't highlight those.
       const lead = match[0].match(/^[.!?\s]*/)[0].length
       const start = match.index + lead
@@ -94,4 +115,4 @@ export function splitByFillers(text) {
   }
   if (cursor < value.length) parts.push({ text: value.slice(cursor), filler: false })
   return parts
-}
+} 
