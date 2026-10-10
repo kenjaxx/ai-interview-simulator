@@ -4,6 +4,8 @@ import LiveTranscript from "../components/LiveTranscript"
 import TypingPanel from "../components/TypingPanel"
 import AnswerTimer from "../components/AnswerTimer"
 import DoneShortcut from "../components/DoneShortcut"
+import InterviewProgress from "../components/interview/InterviewProgress"
+import InterviewControls from "../components/interview/InterviewControls"
 import { MAX_ANSWER_CHARS } from "../lib/limits"
 
 // Also used for retrying a single answer.
@@ -43,6 +45,10 @@ export default function InterviewScreen({ interview }) {
         <p className="progress-label" tabIndex={-1} data-screen-heading aria-live="polite">
           {progress}
         </p>
+
+        {!isRetry && (
+          <InterviewProgress current={interview.questionIndex} total={interview.questionTotal} done={scoring} />
+        )}
 
         <Orb
           state={interview.orbState}
@@ -125,43 +131,7 @@ export default function InterviewScreen({ interview }) {
           </div>
         )}
 
-        {!busy && (
-          <div className="interview-controls">
-            <button className="secondary-btn" onClick={interview.replay} disabled={!interview.ttsSupported}>
-              Replay question
-            </button>
-            {inputMode === "voice" && (
-              <button className="secondary-btn" onClick={interview.reRecord} disabled={!isListening}>
-                Re-record
-              </button>
-            )}
-            {!isRetry && (
-              <button className="secondary-btn" onClick={interview.skip}>
-                {isFollowUp ? "Skip follow-up" : "Skip"}
-              </button>
-            )}
-            {inputMode === "voice" ? (
-              <button className="secondary-btn" onClick={interview.switchToText}>
-                Type instead
-              </button>
-            ) : (
-              interview.voiceOk && (
-                <button className="secondary-btn" onClick={interview.switchToVoice}>
-                  Use voice
-                </button>
-              )
-            )}
-            {isRetry ? (
-              <button className="secondary-btn secondary-btn--danger" onClick={interview.cancelRetry}>
-                Cancel retry
-              </button>
-            ) : (
-              <button className="secondary-btn secondary-btn--danger" onClick={interview.endEarly}>
-                {interview.answeredCount > 0 ? "End & score" : "Quit"}
-              </button>
-            )}
-          </div>
-        )}
+        {!busy && <InterviewControls interview={interview} />}
       </div>
     </div>
   )

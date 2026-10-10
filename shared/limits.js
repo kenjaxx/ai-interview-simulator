@@ -14,10 +14,11 @@ export const MAX_FOLLOWUP_CHARS = 300
 export const MIN_FOLLOWUP_ANSWER_CHARS = 20
 
 // Evaluation input
-export const MAX_QAS = 10 // [rules]
+// 10 questions + 2 follow-ups = 12 answers in the longest session.
+export const MAX_QAS = 12 // [rules]
 export const MAX_QUESTION_CHARS = 500 // [rules]
 export const MAX_ANSWER_CHARS = 4000 // [rules]
-export const MAX_TOTAL_CHARS = 20000 // across all questions + answers, caps the tokens one request can cost
+export const MAX_TOTAL_CHARS = 30000 // across all questions + answers, caps the tokens one request can cost
 
 // Evaluation output
 export const MAX_FEEDBACK_CHARS = 1000 // [rules]

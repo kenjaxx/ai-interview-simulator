@@ -1,0 +1,195 @@
+/* ---------- Setup: compact hero ---------- */
+
+.hero--compact {
+  padding-bottom: 1.5rem;
+}
+
+/* ---------- Stepper ---------- */
+
+.stepper {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+}
+.stepper-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.stepper-item:not(:first-child) {
+  flex: 1;
+}
+/* The line that joins each step to the one before it. */
+.stepper-item:not(:first-child)::before {
+  content: "";
+  flex: 1;
+  min-width: 12px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+.stepper-item--done::before,
+.stepper-item--current::before {
+  background: var(--accent);
+}
+
+.stepper-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 2px;
+  border: none;
+  background: none;
+  color: var(--t-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.stepper-btn:disabled {
+  cursor: default;
+}
+.stepper-dot {
+  width: 26px;
+  height: 26px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 2px solid var(--line-strong);
+  font-size: 12px;
+}
+.stepper-item--current .stepper-btn {
+  color: var(--t-head);
+}
+.stepper-item--current .stepper-dot {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+.stepper-item--done .stepper-dot {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+@media (max-width: 420px) {
+  /* Only the current step keeps its label on very narrow screens. */
+  .stepper-item:not(.stepper-item--current) .stepper-label {
+    display: none;
+  }
+}
+
+/* ---------- Steps ---------- */
+
+.step-heading {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: 0;
+  text-align: left;
+  color: var(--t-head);
+}
+.step-heading:focus {
+  outline: none;
+}
+
+.step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.step-nav {
+  display: flex;
+  gap: 10px;
+}
+.step-nav .primary-btn {
+  flex: 1;
+  margin-top: 0;
+}
+
+/* ---------- Text input (custom role) ---------- */
+
+.field input[type="text"] {
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line-input);
+  background: var(--input-bg);
+  color: var(--t-head);
+  font: inherit;
+  font-size: 14.5px;
+  transition: border-color 0.15s ease;
+}
+.field input[type="text"]:hover,
+.field input[type="text"]:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+.field input[type="text"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---------- Review summary ---------- */
+
+.setup-summary {
+  margin: 0;
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel-bg);
+  text-align: left;
+  font-size: 13.5px;
+}
+.setup-summary dt {
+  color: var(--t-muted);
+}
+.setup-summary dd {
+  margin: 0;
+  color: var(--t-head);
+  font-weight: 600;
+}
+
+/* ---------- Microphone test ---------- */
+
+.mic-test {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+.mic-test-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.mic-test .mode-notice {
+  margin: 0;
+}
+.mic-meter {
+  flex: 1;
+  min-width: 120px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+.mic-meter-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--ok), var(--accent));
+  transition: width 0.08s linear;
+}

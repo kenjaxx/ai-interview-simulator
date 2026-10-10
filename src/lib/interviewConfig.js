@@ -1,7 +1,8 @@
 // Tunable numbers for how an interview runs. Limits shared with the server live in shared/limits.js.
+// The number of questions is chosen on the setup screen (see SESSION_LENGTHS in shared/options.js).
 
-export const QUESTION_COUNT = 6
-export const JD_QUESTION_COUNT = 3 // job-description questions added in Full AI Mode
+export const DEFAULT_QUESTION_COUNT = 6
+export const JD_QUESTION_COUNT = 3 // job-description questions added in Full AI Mode (at most the session length)
 
 // Follow-ups (Full AI Mode only). Each one costs one AI evaluation.
 export const MAX_FOLLOW_UPS = 2 // per interview

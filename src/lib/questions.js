@@ -1,11 +1,16 @@
 import { readStored, writeStored } from "./Storage"
 import { GENERAL_QUESTIONS, SENIORITY_QUESTIONS, ROLE_QUESTIONS } from "./questionBank"
+import { matchesType } from "./questionTypes"
 
 // Picks the questions for one session from the local bank, so it costs no API call.
 // Each session guarantees a few role-specific and seniority-specific questions, then fills the
 // rest with general ones. Questions asked in recent sessions are pushed to the back of the line,
 // so repeat sessions feel fresh. Optional "custom" questions (generated from a job description)
 // take priority over the bank.
+//
+// The type option narrows the bank: "behavioral" keeps past-experience questions, "technical"
+// keeps the rest and uses the role's own questions first. If the filter leaves too few questions
+// (for example a custom role), the list is topped up from the unfiltered bank.
 
 const ROLE_QUOTA = 3 // role-specific questions guaranteed per session (when the role has them)
 const LEVEL_QUOTA = 1 // seniority-specific questions guaranteed per session
@@ -56,10 +61,16 @@ function orderByFreshness(pool, recent) {
 // questions that haven't been asked recently win. The final order is shuffled.
 //   options.recent  questions asked in earlier sessions (oldest first)
 //   options.custom  extra questions that should always be included
-export function pickQuestions(role, seniority, count, { recent = [], custom = [] } = {}) {
-  const roleQs = orderByFreshness(ROLE_QUESTIONS[role] || [], recent)
-  const levelQs = orderByFreshness(SENIORITY_QUESTIONS[seniority] || [], recent)
-  const general = orderByFreshness(GENERAL_QUESTIONS, recent)
+//   options.type    "mixed" (default) | "behavioral" | "technical"
+export function pickQuestions(role, seniority, count, { recent = [], custom = [], type = "mixed" } = {}) {
+  const roleAll = ROLE_QUESTIONS[role] || []
+  const levelAll = SENIORITY_QUESTIONS[seniority] || []
+  const fresh = (pool) => orderByFreshness(pool, recent)
+  const filtered = (pool) => fresh(pool.filter((q) => matchesType(q, type)))
+
+  const roleQs = filtered(roleAll)
+  const levelQs = filtered(levelAll)
+  const general = filtered(GENERAL_QUESTIONS)
 
   const picked = []
   const seen = new Set()
@@ -69,11 +80,16 @@ export function pickQuestions(role, seniority, count, { recent = [], custom = []
     picked.push(q)
   }
 
+  // A technical session leans on the role's own questions as far as they go.
+  const roleQuota = type === "technical" ? count : custom.length ? ROLE_QUOTA_WITH_CUSTOM : ROLE_QUOTA
+
   custom.forEach(add)
-  roleQs.slice(0, custom.length ? ROLE_QUOTA_WITH_CUSTOM : ROLE_QUOTA).forEach(add)
+  roleQs.slice(0, roleQuota).forEach(add)
   levelQs.slice(0, LEVEL_QUOTA).forEach(add)
   general.forEach(add)
   ;[...roleQs, ...levelQs].forEach(add)
+  // Not enough of the requested type: top up from the rest of the bank.
+  ;[...fresh(roleAll), ...fresh(levelAll), ...fresh(GENERAL_QUESTIONS)].forEach(add)
 
   return shuffle(picked)
 }

@@ -1,13 +1,8 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react"
 
 import { ROLES } from "../lib/Options"
-import { countFillers } from "../lib/fillers"
-import { pickQuestions, getRecentQuestions, rememberQuestions } from "../lib/questions"
-import { evaluateSession, generateQuestions } from "../lib/gemini"
 import { findWeakestIndex } from "../lib/scores"
-import { messageForError } from "../lib/Errormessages"
-import { MIN_JD_CHARS } from "../lib/limits"
-import { QUESTION_COUNT, JD_QUESTION_COUNT, MAX_FOLLOW_UPS } from "../lib/interviewConfig"
+import { DEFAULT_QUESTION_COUNT } from "../lib/interviewConfig"
 
 import { useSetupForm } from "./useSetupForm"
 import { useQuota } from "./useQuota"
@@ -15,15 +10,22 @@ import { useSpeechIO } from "./useSpeechIO"
 import { useSessionSave } from "./useSessionSave"
 import { useFollowUps } from "./useFollowUps"
 import { useRetryFlow } from "./useRetryFlow"
+import { useFinalScoring } from "./useFinalScoring"
+import { createStartInterview } from "./startInterview"
+import { createInterviewControls } from "./interviewControls"
+import { buildInterviewApi } from "./buildInterviewApi"
 
-// Runs an interview: the question loop and final scoring. Everything else is delegated:
-//   useSetupForm    what the user picked on the setup screen
-//   useQuota        daily AI allowance
-//   useSpeechIO     speech recognition, text-to-speech, mic
-//   useSessionSave  saving the finished session
-//   useFollowUps    AI follow-up questions
-//   useRetryFlow    re-answering the weakest answer
-// App and the screen components only render what this returns.
+// Runs an interview: the question loop. Everything else is delegated:
+//   useSetupForm        what the user picked on the setup screen
+//   useQuota            daily AI allowance
+//   useSpeechIO         speech recognition, text-to-speech, mic
+//   useSessionSave      saving the finished session
+//   useFollowUps        AI follow-up questions
+//   useRetryFlow        re-answering the weakest answer
+//   useFinalScoring     scoring the finished interview
+//   startInterview.js   building the question list and starting
+//   interviewControls.js  the buttons on the interview screen
+//   buildInterviewApi.js  shaping what App and the screens receive
 //
 // Returns { screen, setScreen, setup, interview, summary }.
 export function useInterview({ user, authLoading }) {
@@ -37,7 +39,7 @@ export function useInterview({ user, authLoading }) {
   const [orbState, setOrbState] = useState("idle") // "idle" | "listening" | "thinking" | "speaking"
   const [currentQuestion, setCurrentQuestion] = useState("")
   const [questionIndex, setQuestionIndex] = useState(0)
-  const [questionTotal, setQuestionTotal] = useState(QUESTION_COUNT)
+  const [questionTotal, setQuestionTotal] = useState(DEFAULT_QUESTION_COUNT)
   const [answeredCount, setAnsweredCount] = useState(0)
   const [inputMode, setInputMode] = useState("voice") // how the interview in progress is answered
   const [session, setSession] = useState([])
@@ -58,8 +60,8 @@ export function useInterview({ user, authLoading }) {
   const currentQuestionRef = useRef("")
   const qasRef = useRef([])
   const inputModeRef = useRef("voice")
-  // Role, seniority, mode, privacy and follow-up choices are locked in at startInterview() and read
-  // from here later. This is what keeps scoring from using stale values from an old render.
+  // Role, seniority, mode, privacy and follow-up choices are locked in when the interview starts and
+  // read from here later. This is what keeps scoring from using stale values from an old render.
   const sessionConfigRef = useRef({
     role: ROLES[0],
     seniority: "Mid-level",
@@ -232,79 +234,24 @@ export function useInterview({ user, authLoading }) {
   }, [stopSpeaking, stopListening, releaseMic, resetFollowUps, resetRetry, resetSave, clearFollowUp])
 
   // forceMode lets the user re-score a finished interview locally when the AI is unavailable.
-  const runFinalScoring = useCallback(
-    async (forceMode) => {
-      const interviewId = interviewIdRef.current
-      const config = sessionConfigRef.current
-      const mode = forceMode || config.mode
-      if (mode !== config.mode) {
-        sessionConfigRef.current = { ...config, mode }
-        setSessionMode(mode)
-      }
-
-      // All answers are in, so the interview is over: release the mic now.
-      releaseMic()
-
-      setAwaitingFinalScore(true)
-      setOrbState("thinking")
-      setError(null)
-
-      try {
-        const {
-          evaluations,
-          overallSummary: summaryText,
-          usage: usageInfo,
-        } = await evaluateSession({
-          role: config.role,
-          seniority: config.seniority,
-          qas: qasRef.current,
-          mock: mode === "practice",
-        })
-
-        // The user left (signed out / restarted) while we were waiting - drop the result.
-        if (interviewIdRef.current !== interviewId) return
-
-        const finalSession = qasRef.current.map((qa, i) => ({
-          question: qa.question,
-          answer: qa.answer,
-          inputMethod: qa.inputMethod,
-          isFollowUp: !!qa.isFollowUp,
-          metrics: qa.metrics,
-          evaluation: evaluations[i],
-        }))
-
-        setSession(finalSession)
-        setSessionMeta({ role: config.role, seniority: config.seniority, mode, date: new Date() })
-        setOverallSummary(summaryText || "")
-        setUsage(mode === "full" ? usageInfo : null)
-        if (mode === "full") applyUsage(usageInfo)
-        setScreen("summary")
-        setOrbState("idle")
-        setAwaitingFinalScore(false)
-
-        if (config.save) {
-          queueSave(
-            {
-              role: config.role,
-              seniority: config.seniority,
-              mode,
-              overallSummary: summaryText || "",
-              session: finalSession,
-            },
-            interviewId
-          )
-        } else {
-          markSkipped()
-        }
-      } catch (err) {
-        if (interviewIdRef.current !== interviewId) return
-        console.error("Failed to score the session:", err)
-        setError(messageForError(err))
-        setOrbState("idle")
-      }
-    },
-    [releaseMic, queueSave, markSkipped, applyUsage]
-  )
+  const { runFinalScoring } = useFinalScoring({
+    sessionConfigRef,
+    interviewIdRef,
+    qasRef,
+    releaseMic,
+    queueSave,
+    markSkipped,
+    applyUsage,
+    setSessionMode,
+    setAwaitingFinalScore,
+    setOrbState,
+    setError,
+    setSession,
+    setSessionMeta,
+    setOverallSummary,
+    setUsage,
+    setScreen,
+  })
 
   // Called when the last question is done, or the user ends early.
   const finishInterview = useCallback(() => {
@@ -365,12 +312,6 @@ export function useInterview({ user, authLoading }) {
     [isFollowUpRef, canAskFollowUp, askFollowUp, presentQuestion, advance]
   )
 
-  // Gives up waiting for a follow-up and moves on.
-  const skipFollowUp = () => {
-    cancelPending()
-    advance()
-  }
-
   useEffect(() => {
     answerRouterRef.current = (answerText, metrics, inputMethod) => {
       if (isRetryActive()) handleRetryAnswer(answerText, metrics, inputMethod)
@@ -378,69 +319,45 @@ export function useInterview({ user, authLoading }) {
     }
   }, [handleAnswer, handleRetryAnswer, isRetryActive])
 
-  // ---------- starting an interview ----------
+  // ---------- controls and starting ----------
 
-  const startInterview = async () => {
-    if (starting) return
+  const controls = createInterviewControls({
+    awaitingFinalScore,
+    isSpeaking,
+    answerRouterRef,
+    currentQuestionRef,
+    inputModeRef,
+    promptShownAtRef,
+    isRetryActive,
+    runRetryScoring,
+    runFinalScoring,
+    presentQuestion,
+    beginAnswering,
+    advance,
+    finishInterview,
+    cancelPending,
+    clearFollowUp,
+    stopSpeaking,
+    stopListening,
+    releaseMic,
+    acquireMic,
+    setError,
+    setInputMode,
+    setOrbState,
+  })
 
-    // Capture the setup choices now: the user could touch the form while questions are generated.
-    const mode = effectiveMode
-    const chosenRole = form.role
-    const chosenSeniority = form.seniority
-    const jd = form.jobDescription.trim()
-    const useJd = jdAvailable && jd.length >= MIN_JD_CHARS
-    const save = form.saveHistory
-    const useFollowUps = form.followUps && followUpsAvailable
-
-    const interviewId = ++interviewIdRef.current
-    setNotice(null)
-
-    let custom = []
-    let note = null
-    if (useJd) {
-      setStarting(true)
-      try {
-        const result = await generateQuestions({
-          role: chosenRole,
-          seniority: chosenSeniority,
-          jobDescription: jd,
-          count: JD_QUESTION_COUNT,
-        })
-        custom = result.questions
-        applyUsage(result.usage)
-        note = `${custom.length} of these questions are tailored to the job description you pasted.`
-      } catch (err) {
-        console.error("Couldn't generate tailored questions:", err)
-        note = "Couldn't generate job-specific questions, so a standard set was used."
-      } finally {
-        setStarting(false)
-      }
-      // The user signed out or restarted while we were waiting.
-      if (interviewIdRef.current !== interviewId) return
-    }
-
-    sessionConfigRef.current = {
-      role: chosenRole,
-      seniority: chosenSeniority,
-      mode,
-      save,
-      followUps: useFollowUps && mode === "full",
-    }
-    inputModeRef.current = setupMode
+  // Applies a freshly built question list: resets all per-interview state and asks question one.
+  const beginSession = ({ config, questions, note, mode, inputMode: chosenInput }) => {
+    sessionConfigRef.current = config
+    inputModeRef.current = chosenInput
     qasRef.current = []
     resetRetry()
     resetFollowUps()
     resetSave()
-
-    const questions = pickQuestions(chosenRole, chosenSeniority, QUESTION_COUNT, {
-      recent: getRecentQuestions(),
-      custom,
-    })
-    rememberQuestions(questions.filter((q) => !custom.includes(q)))
     questionsRef.current = questions
     questionIndexRef.current = 0
 
-    setInputMode(setupMode)
+    setInputMode(chosenInput)
     setSessionMode(mode)
     setQuestionIndex(0)
     setQuestionTotal(questions.length)
@@ -459,81 +376,19 @@ export function useInterview({ user, authLoading }) {
     presentQuestion(questions[0])
   }
 
-  // ---------- interview controls ----------
-
-  const retry = () => {
-    setError(null)
-    if (awaitingFinalScore) {
-      if (isRetryActive()) runRetryScoring()
-      else runFinalScoring()
-    } else {
-      presentQuestion(currentQuestionRef.current)
-    }
-  }
-
-  // Reads the question again. Any answer in progress is discarded, since the mic has to be off while it speaks.
-  const replay = () => {
-    setError(null)
-    presentQuestion(currentQuestionRef.current)
-  }
-
-  // Throws away what was said so far and starts listening again, without re-reading the question.
-  const reRecord = () => {
-    setError(null)
-    stopSpeaking()
-    beginAnswering()
-  }
-
-  // Skips the current question (or the current follow-up) and moves on to the next main question.
-  const skip = () => {
-    stopSpeaking()
-    stopListening()
-    setError(null)
-    advance()
-  }
-
-  const endEarly = () => {
-    stopSpeaking()
-    stopListening()
-    setError(null)
-    cancelPending()
-    clearFollowUp()
-    finishInterview()
-  }
-
-  const switchToText = () => {
-    stopListening()
-    releaseMic()
-    inputModeRef.current = "text"
-    setInputMode("text")
-    setError(null)
-    promptShownAtRef.current = Date.now()
-    // If the question is still being read, the orb keeps its speaking state until it finishes.
-    if (!isSpeaking) setOrbState("idle")
-  }
-
-  const switchToVoice = () => {
-    inputModeRef.current = "voice"
-    setInputMode("voice")
-    setError(null)
-    acquireMic()
-    // If the question is still being read, listening starts when it finishes.
-    if (!isSpeaking) beginAnswering()
-  }
-
-  // The typed text itself lives in the TypingPanel component, so keystrokes don't re-render the app.
-  const submitTyped = (rawText) => {
-    const text = rawText.trim()
-    if (!text) return
-    stopSpeaking()
-    // Typed answers have no pace or response delay, so those are left at 0 and flagged via inputMethod.
-    answerRouterRef.current(text, { wpm: 0, fillerCount: countFillers(text), responseDelaySec: 0 }, "text")
-  }
-
-  const scoreWithPractice = () => {
-    if (isRetryActive()) runRetryScoring("practice")
-    else runFinalScoring("practice")
-  }
+  const startInterview = createStartInterview({
+    form,
+    effectiveMode,
+    jdAvailable,
+    followUpsAvailable,
+    setupMode,
+    applyUsage,
+    starting,
+    setStarting,
+    setNotice,
+    interviewIdRef,
+    beginSession,
+  })
 
   // If the user signs out mid-interview, App stays mounted, so the question would keep being read
   // aloud and the mic would start listening behind the login screen. Tear everything down instead.
@@ -550,99 +405,47 @@ export function useInterview({ user, authLoading }) {
     [session, retryResults]
   )
 
-  return {
+  return buildInterviewApi({
     screen,
     setScreen,
-
-    setup: {
-      role: form.role,
-      setRole: form.setRole,
-      seniority: form.seniority,
-      setSeniority: form.setSeniority,
-      aiMode: effectiveMode,
-      setAiMode: form.setAiMode,
-      quota,
-      quotaStatus,
-      quotaExhausted,
-      refreshQuota,
-      jobDescription: form.jobDescription,
-      setJobDescription: form.setJobDescription,
-      jdAvailable,
-      followUps: form.followUps,
-      setFollowUps: form.setFollowUps,
-      followUpsAvailable,
-      saveHistory: form.saveHistory,
-      setSaveHistory: form.setSaveHistory,
-      speechLang: form.speechLang,
-      selectAccent: form.selectAccent,
-      ttsVoiceURI: form.ttsVoiceURI,
-      setTtsVoiceURI: form.setTtsVoiceURI,
-      ttsRate: form.ttsRate,
-      setTtsRate: form.setTtsRate,
-      voices: speech.voices,
-      previewAccent: speech.previewAccent,
-      previewVoice: speech.previewVoice,
-      stopPreview: speech.stopPreview,
-      starting,
-      setupMode,
-      setInputPref: form.setInputPref,
-      support: speech.support,
-      mic: speech.mic,
-      notice,
-      questionCount: QUESTION_COUNT,
-      maxFollowUps: MAX_FOLLOW_UPS,
-      start: startInterview,
-    },
-
-    interview: {
-      orbState,
-      currentQuestion,
-      questionIndex,
-      questionTotal,
-      answeredCount,
-      inputMode,
-      error,
-      awaitingFinalScore,
-      sessionMode,
-      sessionNote,
-      isFollowUp,
-      preparingFollowUp,
-      skipFollowUp,
-      isRetry: retryIndex !== null,
-      retryQuestionNumber: retryIndex !== null ? retryIndex + 1 : null,
-      voiceOk: speech.voiceOk,
-      ttsSupported: speech.ttsSupported,
-      isListening: speech.isListening,
-      getLevel: speech.getLevel,
-      subscribeWord: speech.subscribeWord,
-      subscribeTranscript: speech.subscribeTranscript,
-      getTranscript: speech.getTranscript,
-      finishAnswer: speech.finishAnswer,
-      submitTyped,
-      retry,
-      replay,
-      reRecord,
-      skip,
-      endEarly,
-      cancelRetry,
-      switchToText,
-      switchToVoice,
-      scoreWithPractice,
-    },
-
-    summary: {
-      session,
-      meta: sessionMeta,
-      overallSummary,
-      sessionMode,
-      usage,
-      saveStatus,
-      retrySave,
-      restart,
-      retryResults,
-      weakestIndex,
-      startRetry,
-      retryUsesAi: sessionMode === "full" && !quotaExhausted,
-    },
-  }
+    uid,
+    form,
+    speech,
+    quota,
+    quotaStatus,
+    quotaExhausted,
+    effectiveMode,
+    jdAvailable,
+    followUpsAvailable,
+    refreshQuota,
+    starting,
+    setupMode,
+    notice,
+    startInterview,
+    orbState,
+    currentQuestion,
+    questionIndex,
+    questionTotal,
+    answeredCount,
+    inputMode,
+    error,
+    awaitingFinalScore,
+    sessionMode,
+    sessionNote,
+    isFollowUp,
+    preparingFollowUp,
+    retryIndex,
+    controls,
+    session,
+    sessionMeta,
+    overallSummary,
+    usage,
+    saveStatus,
+    retrySave,
+    restart,
+    retryResults,
+    weakestIndex,
+    startRetry,
+    cancelRetry,
+  })
 }

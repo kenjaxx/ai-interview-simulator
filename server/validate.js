@@ -1,6 +1,7 @@
 import { ROLES, SENIORITIES } from "./settings.js"
 import { HttpError } from "./errors.js"
 import { clampNumber, clampText } from "./utils.js"
+import { sanitizeRole, MIN_ROLE_CHARS } from "../shared/options.js"
 import {
   MIN_JD_CHARS,
   MAX_JD_CHARS,
@@ -14,8 +15,12 @@ import {
 
 export function validateRoleAndSeniority(body) {
   if (!body || typeof body !== "object") throw new HttpError(400, "Invalid request.")
-  const { role, seniority } = body
-  if (!ROLES.has(role)) throw new HttpError(400, "Invalid role.")
+  const { seniority } = body
+
+  // Preset roles pass through untouched. Anything else is a custom role typed by the user: it is
+  // cleaned down to a plain title (it goes into AI prompts) and must still have some content.
+  const role = ROLES.has(body.role) ? body.role : sanitizeRole(body.role)
+  if (role.length < MIN_ROLE_CHARS) throw new HttpError(400, "Invalid role.")
   if (!SENIORITIES.has(seniority)) throw new HttpError(400, "Invalid seniority.")
   return { role, seniority }
 }

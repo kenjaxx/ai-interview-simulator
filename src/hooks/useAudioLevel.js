@@ -1,14 +1,16 @@
 import { useRef, useCallback, useEffect } from "react"
 
-// Manages one microphone stream for the whole interview and exposes a getLevel() function
-// that reads the current volume (0 to 1) on demand.
+// Manages one microphone stream and exposes a getLevel() function that reads the current
+// volume (0 to 1) on demand. Used for the whole interview and for the microphone test on setup.
 //
 // There is deliberately NO React state and NO animation loop in here. Whoever needs the level
-// (the Orb) polls getLevel() from its own requestAnimationFrame loop and writes straight to the
-// DOM, so mic volume never triggers a React re-render.
+// (the Orb, the mic test) polls getLevel() from its own requestAnimationFrame loop and writes
+// straight to the DOM, so mic volume never triggers a React re-render.
 //
 // acquireMic() is idempotent: call it as often as you like, the stream is only opened once.
-// releaseMic() must be called when the interview ends.
+// It resolves to false if the mic couldn't be opened; getMicError() then returns the reason
+// (null if the attempt was only cancelled by releaseMic).
+// releaseMic() must be called when the interview or test ends.
 export function useAudioLevel() {
   const audioContextRef = useRef(null)
   const analyserRef = useRef(null)
@@ -16,6 +18,7 @@ export function useAudioLevel() {
   const dataRef = useRef(null)
   const pendingRef = useRef(null) // in-flight acquire, so concurrent calls share one getUserMedia
   const acquireIdRef = useRef(0) // bumped by acquire and release, so a late acquire can detect it was cancelled
+  const errorRef = useRef(null) // why the last acquire failed
 
   const acquireMic = useCallback(() => {
     // Already have a live stream: just make sure the context isn't suspended.
@@ -26,6 +29,7 @@ export function useAudioLevel() {
     if (pendingRef.current) return pendingRef.current
 
     const id = ++acquireIdRef.current
+    errorRef.current = null
 
     const run = async () => {
       let stream = null
@@ -53,6 +57,7 @@ export function useAudioLevel() {
       } catch (err) {
         stream?.getTracks().forEach((track) => track.stop())
         console.error("Microphone access failed:", err)
+        if (acquireIdRef.current === id) errorRef.current = err
         return false
       }
     }
@@ -76,6 +81,8 @@ export function useAudioLevel() {
     return Math.min(sum / data.length / 128, 1)
   }, [])
 
+  const getMicError = useCallback(() => errorRef.current, [])
+
   const releaseMic = useCallback(() => {
     acquireIdRef.current++ // cancels any acquire that's still waiting on permission
     pendingRef.current = null
@@ -94,5 +101,5 @@ export function useAudioLevel() {
   // Never leave the mic open after the component goes away.
   useEffect(() => releaseMic, [releaseMic])
 
-  return { getLevel, acquireMic, releaseMic }
+  return { getLevel, acquireMic, releaseMic, getMicError }
 }

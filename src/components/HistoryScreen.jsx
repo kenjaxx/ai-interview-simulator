@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react"
 import { useHistory } from "../hooks/useHistory"
+import { useToast } from "../context/ToastContext"
 import { chronologicalSlice, summarizeSessions } from "../lib/trends"
-import SessionReview from "./SessionReview"
-import ExportPdfButton from "./ExportPdfButton"
+import HistoryItem from "./history/HistoryItem"
+import HistorySkeleton from "./history/HistorySkeleton"
 import TrendCards from "./TrendCards"
 import ProgressChart from "./ProgressChart"
 import "./HistoryScreen.css"
@@ -12,11 +13,6 @@ const FILTERS = [
   { id: "full", label: "Full AI" },
   { id: "practice", label: "Practice" },
 ]
-
-function formatDate(date) {
-  if (!date) return "Just now"
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
-}
 
 export default function HistoryScreen({ uid, onBack }) {
   const {
@@ -30,6 +26,7 @@ export default function HistoryScreen({ uid, onBack }) {
     loadMore,
     remove,
   } = useHistory(uid)
+  const toast = useToast()
 
   const [filter, setFilter] = useState("all")
   const [openId, setOpenId] = useState(null)
@@ -37,7 +34,11 @@ export default function HistoryScreen({ uid, onBack }) {
 
   const handleDelete = async (id) => {
     const deleted = await remove(id)
-    if (!deleted) return
+    if (!deleted) {
+      toast.error("Couldn't delete that session. Please try again.")
+      return
+    }
+    toast.success("Session deleted.")
     setConfirmId(null)
     if (openId === id) setOpenId(null)
   }
@@ -68,12 +69,7 @@ export default function HistoryScreen({ uid, onBack }) {
         </div>
       </div>
 
-      {status === "loading" && (
-        <div className="history-state" role="status">
-          <div className="page-loading-spinner" />
-          <p>Loading your sessions…</p>
-        </div>
-      )}
+      {status === "loading" && <HistorySkeleton />}
 
       {status === "error" && (
         <div className="error-panel" role="alert">
@@ -143,66 +139,18 @@ export default function HistoryScreen({ uid, onBack }) {
               )}
 
               <ul className="history-list">
-                {visible.map((s) => {
-                  const open = openId === s.id
-                  return (
-                    <li className="history-item" key={s.id}>
-                      <button
-                        className="history-item-head"
-                        onClick={() => setOpenId(open ? null : s.id)}
-                        aria-expanded={open}
-                      >
-                        <span className="history-item-main">
-                          <strong>{s.role}</strong>
-                          <span>
-                            {s.seniority} · {formatDate(s.createdAt)}
-                          </span>
-                        </span>
-                        <span className={`mode-badge ${s.mode === "full" ? "mode-badge--full" : ""}`}>
-                          {s.mode === "full" ? "Full AI" : "Practice"}
-                        </span>
-                        <span
-                          className="history-item-score"
-                          aria-label={`Average score ${s.averages.overall}`}
-                        >
-                          {s.averages.overall}
-                        </span>
-                      </button>
-
-                      {open && (
-                        <div className="history-item-body">
-                          {s.overallSummary && <p className="history-summary">{s.overallSummary}</p>}
-                          <SessionReview session={s.session} />
-                          <div className="history-delete">
-                            <ExportPdfButton
-                              meta={{ role: s.role, seniority: s.seniority, mode: s.mode, date: s.createdAt }}
-                              overallSummary={s.overallSummary}
-                              session={s.session}
-                            />
-                            {confirmId === s.id ? (
-                              <>
-                                <span>Delete this session permanently?</span>
-                                <button
-                                  className="secondary-btn secondary-btn--danger"
-                                  onClick={() => handleDelete(s.id)}
-                                >
-                                  Yes, delete
-                                </button>
-                                <button className="secondary-btn" onClick={() => setConfirmId(null)}>
-                                  Cancel
-                                </button>
-                              </>
-                            ) : (
-                              <button className="secondary-btn" onClick={() => setConfirmId(s.id)}>
-                                Delete session
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </li>
-                  )
-                })}
+                {visible.map((s) => (
+                  <HistoryItem
+                    key={s.id}
+                    s={s}
+                    open={openId === s.id}
+                    confirming={confirmId === s.id}
+                    onToggle={() => setOpenId(openId === s.id ? null : s.id)}
+                    onAskDelete={() => setConfirmId(s.id)}
+                    onCancelDelete={() => setConfirmId(null)}
+                    onDelete={() => handleDelete(s.id)}
+                  />
+                ))}
               </ul>
             </>
           )}

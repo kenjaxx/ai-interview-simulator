@@ -27,13 +27,13 @@ export const geminiUrl = (model) =>
 // every profile has to fit well inside that, including a retry, or the user gets a hard platform
 // timeout instead of a clean error.
 //   maxOutputTokens   generous, because "thinking" tokens can count toward this on some models
-//   attemptTimeoutMs  one try on one model. Kept well under half the total budget, so a slow first
+//   attemptTimeoutMs  one try on one model. Kept well under the total budget, so a slow first
 //                     attempt still leaves room for a real retry on the fallback model.
 //   totalBudgetMs     everything, including the wait and the second attempt
-// Small outputs (a follow-up, three questions) get small budgets: the user is waiting on them live,
-// and a stuck request should fail over quickly instead of holding the interview.
+// The evaluate profile is sized for the longest session (10 questions + 2 follow-ups = 12 answers,
+// each with feedback, a tip and a sample answer).
 export const GEMINI_PROFILES = {
-  evaluate: { maxOutputTokens: 8192, attemptTimeoutMs: 30_000, totalBudgetMs: 52_000 },
+  evaluate: { maxOutputTokens: 12288, attemptTimeoutMs: 34_000, totalBudgetMs: 52_000 },
   questions: { maxOutputTokens: 2048, attemptTimeoutMs: 20_000, totalBudgetMs: 40_000 },
   followup: { maxOutputTokens: 2048, attemptTimeoutMs: 15_000, totalBudgetMs: 30_000 },
 }
@@ -42,5 +42,6 @@ export const MIN_RETRY_WINDOW_MS = 8_000 // don't start a second attempt with le
 export const SHORT_RETRY_SEC = 10 // a 429 asking us to wait longer than this isn't worth retrying on the same model
 
 // ---------- allowed values ----------
+// ROLES are the preset roles. Custom roles are validated separately (see validate.js).
 export const ROLES = new Set(ROLE_LIST)
 export const SENIORITIES = new Set(SENIORITY_LIST)

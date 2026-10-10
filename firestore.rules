@@ -3,9 +3,9 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ---------- validation helpers ----------
-    // Keep the limits below in step with api/evaluate.js and saveSession() in src/lib/history.js.
-    // (Rules can't import code, so role/seniority are only length-checked here on purpose: the
-    // server is what enforces the real lists, and this avoids a third copy to keep in sync.)
+    // Keep the limits below in step with shared/limits.js ([rules] markers) and saveSession() in
+    // src/lib/history.js. Rules can't import code, so role/seniority are only length-checked here:
+    // the server enforces the real lists (presets, or a sanitized custom role of up to 60 chars).
 
     function isScore(v) {
       return v is int && v >= 0 && v <= 100;
@@ -30,7 +30,7 @@ service cloud.firestore {
         && m.responseDelaySec is number && m.responseDelaySec >= 0 && m.responseDelaySec <= 600;
     }
 
-        function validStar(s) {
+    function validStar(s) {
       return s is map
         && s.keys().hasOnly(['situation', 'task', 'action', 'result'])
         && s.keys().hasAll(['situation', 'task', 'action', 'result'])
@@ -54,27 +54,29 @@ service cloud.firestore {
     }
 
     function validQa(q) {
-  return q is map
-    && q.keys().hasOnly(['question', 'answer', 'inputMethod', 'metrics', 'evaluation', 'isFollowUp'])
-    && q.keys().hasAll(['question', 'answer', 'inputMethod', 'metrics', 'evaluation'])
-    && q.question is string && q.question.size() >= 1 && q.question.size() <= 500
-    && q.answer is string && q.answer.size() <= 4000
-    && q.inputMethod in ['voice', 'text']
-    && (!('isFollowUp' in q) || q.isFollowUp is bool)
-    && validMetrics(q.metrics)
-    && validEvaluation(q.evaluation);
-}
-    // Rules have no loops, so each possible index (max 10 answers) is checked explicitly.
-    // An index past the end of the list passes automatically.
+      return q is map
+        && q.keys().hasOnly(['question', 'answer', 'inputMethod', 'metrics', 'evaluation', 'isFollowUp'])
+        && q.keys().hasAll(['question', 'answer', 'inputMethod', 'metrics', 'evaluation'])
+        && q.question is string && q.question.size() >= 1 && q.question.size() <= 500
+        && q.answer is string && q.answer.size() <= 4000
+        && q.inputMethod in ['voice', 'text']
+        && (!('isFollowUp' in q) || q.isFollowUp is bool)
+        && validMetrics(q.metrics)
+        && validEvaluation(q.evaluation);
+    }
+
+    // Rules have no loops, so each possible index (max 12 answers: 10 questions + 2 follow-ups)
+    // is checked explicitly. An index past the end of the list passes automatically.
     function qaOk(qas, i) {
       return qas.size() <= i || validQa(qas[i]);
     }
 
     function validQas(qas) {
       return qas is list
-        && qas.size() >= 1 && qas.size() <= 10
+        && qas.size() >= 1 && qas.size() <= 12
         && qaOk(qas, 0) && qaOk(qas, 1) && qaOk(qas, 2) && qaOk(qas, 3) && qaOk(qas, 4)
-        && qaOk(qas, 5) && qaOk(qas, 6) && qaOk(qas, 7) && qaOk(qas, 8) && qaOk(qas, 9);
+        && qaOk(qas, 5) && qaOk(qas, 6) && qaOk(qas, 7) && qaOk(qas, 8) && qaOk(qas, 9)
+        && qaOk(qas, 10) && qaOk(qas, 11);
     }
 
     function validSession(d) {

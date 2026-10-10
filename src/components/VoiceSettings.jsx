@@ -8,6 +8,7 @@ import {
   voicesForAccent,
   bestVoiceForAccent,
 } from "../lib/speechOptions"
+import { onRadioGroupKeyDown } from "../lib/radioKeys"
 import "./VoiceSettings.css"
 
 // support:         result of getSupport()
@@ -18,6 +19,9 @@ import "./VoiceSettings.css"
 // onPreviewAccent: (code, onEnd) => void
 // onPreviewVoice:  (onEnd) => void   previews the current accent / voice / speed settings
 // onStopPreview:   () => void
+//
+// The accent list is a radio group: Tab lands on the chosen accent, arrow keys move between accents.
+// The preview buttons are ordinary buttons and stay in the normal tab order.
 export default function VoiceSettings({
   support,
   lang,
@@ -64,11 +68,16 @@ export default function VoiceSettings({
           Your accent
         </span>
         <p className="mode-notice" style={{ marginTop: 0 }}>
-          Used for speech recognition and for the interviewer's voice. Press ▶ to hear each one. Which voices
-          exist depends on your device and browser.
+          Used for speech recognition and for the interviewer's voice. Use the arrow keys to move between
+          accents and press ▶ to hear each one. Which voices exist depends on your device and browser.
         </p>
 
-        <div className="accent-list" role="radiogroup" aria-labelledby="accent-label">
+        <div
+          className="accent-list"
+          role="radiogroup"
+          aria-labelledby="accent-label"
+          onKeyDown={onRadioGroupKeyDown}
+        >
           {ACCENTS.map((a) => {
             const matches = voicesForAccent(voices, a.code)
             const best = matches[0]
@@ -93,6 +102,7 @@ export default function VoiceSettings({
                   type="button"
                   role="radio"
                   aria-checked={active}
+                  tabIndex={active ? 0 : -1}
                   className="accent-pick"
                   onClick={() => onSelectAccent(a.code)}
                 >

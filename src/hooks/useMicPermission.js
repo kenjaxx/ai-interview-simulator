@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react"
 
 // Reports microphone permission without opening a stream, and offers a "test" that asks for it.
 // The Permissions API isn't available everywhere (Firefox, older Safari), so "unknown" is a normal state.
+// report() lets other code (the mic level test) feed in what it learned by actually opening the mic.
 export function useMicPermission() {
   const [state, setState] = useState("unknown") // "unknown" | "prompt" | "granted" | "denied" | "missing"
   const [testing, setTesting] = useState(false)
@@ -45,5 +46,7 @@ export function useMicPermission() {
     }
   }, [])
 
-  return { state, testing, request }
+  const report = useCallback((next) => setState(next), [])
+
+  return { state, testing, request, report }
 }

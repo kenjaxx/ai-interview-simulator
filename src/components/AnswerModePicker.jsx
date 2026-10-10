@@ -1,11 +1,18 @@
 import { voiceAvailable } from "../lib/support"
+import SegmentedControl from "./SegmentedControl"
+import MicTest from "./setup/MicTest"
 import "./AnswerModePicker.css"
 
 // value: "voice" | "text"
 // support: result of getSupport()
-// mic: { state, testing, request } from useMicPermission()
+// mic: { state, testing, request, report } from useMicPermission()
 export default function AnswerModePicker({ value, onChange, support, mic }) {
   const voiceOk = voiceAvailable(support, mic.state)
+
+  const options = [
+    { value: "voice", label: "🎙 Voice", disabled: !voiceOk },
+    { value: "text", label: "⌨ Typing" },
+  ]
 
   return (
     <div className="field">
@@ -13,27 +20,7 @@ export default function AnswerModePicker({ value, onChange, support, mic }) {
         Answer by
       </span>
 
-      <div className="answer-mode" role="radiogroup" aria-labelledby="answer-mode-label">
-        <button
-          type="button"
-          role="radio"
-          aria-checked={value === "voice"}
-          disabled={!voiceOk}
-          className={`answer-mode-btn ${value === "voice" ? "answer-mode-btn--on" : ""}`}
-          onClick={() => onChange("voice")}
-        >
-          🎙 Voice
-        </button>
-        <button
-          type="button"
-          role="radio"
-          aria-checked={value === "text"}
-          className={`answer-mode-btn ${value === "text" ? "answer-mode-btn--on" : ""}`}
-          onClick={() => onChange("text")}
-        >
-          ⌨ Typing
-        </button>
-      </div>
+      <SegmentedControl labelId="answer-mode-label" options={options} value={value} onChange={onChange} />
 
       {!support.recognition && (
         <p className="mode-notice mode-notice--warn" role="status">
@@ -63,13 +50,7 @@ export default function AnswerModePicker({ value, onChange, support, mic }) {
           Microphone ready.
         </p>
       )}
-      {voiceOk && mic.state !== "granted" && (
-        <div className="mode-notice">
-          <button type="button" className="secondary-btn" onClick={mic.request} disabled={mic.testing}>
-            {mic.testing ? "Waiting for permission…" : "Test microphone"}
-          </button>
-        </div>
-      )}
+      {voiceOk && <MicTest mic={mic} />}
       {!support.synthesis && (
         <p className="mode-notice" role="status">
           This browser can't read questions aloud, so they'll only appear on screen.

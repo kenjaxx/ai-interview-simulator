@@ -2,10 +2,21 @@ import Header from "../components/Header"
 import SessionReview from "../components/SessionReview"
 import RetryCard from "../components/RetryCard"
 import ExportPdfButton from "../components/ExportPdfButton"
+import ScoreSummary from "../components/summary/ScoreSummary"
+import { useHistoryBaseline } from "../hooks/useHistoryBaseline"
+import { useSaveToasts } from "../hooks/useSaveToasts"
 import { resetPhrase } from "../lib/time"
 
 // summary: the `summary` object from useInterview().
 export default function SummaryScreen({ summary, onHistory }) {
+  // Toasts for save results, and the user's earlier average for the "vs your average" comparison.
+  useSaveToasts(summary.saveStatus)
+  const baseline = useHistoryBaseline({
+    uid: summary.uid,
+    saveStatus: summary.saveStatus,
+    mode: summary.sessionMode,
+  })
+
   return (
     <div className="page">
       <Header onHistory={onHistory} />
@@ -24,6 +35,8 @@ export default function SummaryScreen({ summary, onHistory }) {
             {summary.overallSummary}
           </p>
         )}
+
+        <ScoreSummary session={summary.session} baseline={baseline} sessionMode={summary.sessionMode} />
 
         {summary.sessionMode === "full" && summary.usage && (
           <p className="usage-note" role="status">
@@ -44,6 +57,7 @@ export default function SummaryScreen({ summary, onHistory }) {
           session={summary.session}
           retries={summary.retryResults}
           sessionMode={summary.sessionMode}
+          showScores={false}
         />
 
         <div className="save-status" role="status">
