@@ -1,36 +1,206 @@
-.login-page {
-  min-height: 100vh;
+/* The login page is always dark, whatever the app theme is: it is a lit room, not a surface.
+   --lc is the light colour as "r, g, b". Cool white is the default; try 255, 222, 170 for warm tungsten
+   or 190, 155, 255 for violet. */
+
+.login-stage {
+  --lc: 232, 224, 255;
+  --mono: "JetBrains Mono", "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  position: relative;
   width: 100%;
+  min-height: 100vh;
+  min-height: 100svh;
+  box-sizing: border-box;
+  padding: 2rem 1rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1.5rem;
-  background: radial-gradient(1200px 500px at 50% -10%, var(--app-glow), transparent 60%), var(--app-bg);
-  color: var(--t-main);
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Roboto,
-    sans-serif;
+  overflow: hidden;
+  background: #040407;
+  color: #ececf4;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
-.login-theme {
-  position: fixed;
-  top: 14px;
-  right: 14px;
+.login-stage button:focus-visible {
+  outline: 2px solid rgb(var(--lc));
+  outline-offset: 2px;
 }
 
-.login-card {
+/* ---------- scene ---------- */
+
+.login-scene {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.login-ambient {
+  position: absolute;
+  right: -120px;
+  top: -160px;
+  width: 520px;
+  height: 520px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(var(--lc), 0.1), rgba(var(--lc), 0) 65%);
+}
+
+.login-star {
+  position: absolute;
+  border-radius: 50%;
+  background: #fff;
+}
+
+/* A beam is a wrapper (rotated and blurred) around an <i> (clipped to a cone and faded along its
+   length). The wrapper's left/top/width/height/transform are set from LightScene every frame. */
+.login-beam {
+  position: absolute;
+  transform-origin: 50% 0;
+  mix-blend-mode: screen;
+  will-change: transform;
+}
+.login-beam > i {
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(38% 0, 62% 0, 100% 100%, 0 100%);
+  background: linear-gradient(90deg, rgba(var(--lc), 0), rgba(var(--lc), 0.6) 50%, rgba(var(--lc), 0));
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.55) 38%, rgba(0, 0, 0, 0) 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.55) 38%, rgba(0, 0, 0, 0) 100%);
+}
+.login-beam--wide {
+  filter: blur(34px);
+  opacity: 0.28;
+}
+.login-beam--mid {
+  filter: blur(14px);
+  opacity: 0.75;
+}
+.login-beam--core {
+  filter: blur(5px);
+  opacity: 0.55;
+}
+.login-beam--core > i {
+  background: linear-gradient(90deg, rgba(var(--lc), 0), rgba(var(--lc), 0.8) 50%, rgba(var(--lc), 0));
+}
+
+.login-pool,
+.login-source,
+.login-streak {
+  position: absolute;
+  left: 0;
+  top: 0;
+  mix-blend-mode: screen;
+  will-change: transform;
+}
+.login-pool {
+  width: 420px;
+  height: 230px;
+  border-radius: 50%;
+  filter: blur(6px);
+  background: radial-gradient(ellipse, rgba(var(--lc), 0.3), rgba(var(--lc), 0.08) 45%, rgba(var(--lc), 0) 70%);
+}
+.login-source {
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.7), rgba(var(--lc), 0.22) 30%, rgba(var(--lc), 0) 68%);
+}
+.login-streak {
+  width: 480px;
+  height: 2px;
+  filter: blur(1px);
+  background: linear-gradient(90deg, rgba(var(--lc), 0), rgba(var(--lc), 0.6) 50%, rgba(var(--lc), 0));
+}
+
+.login-dust-layer {
+  position: absolute;
+  inset: 0;
+}
+.login-dust {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: rgb(var(--lc));
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+.login-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 45%, rgba(0, 0, 0, 0) 35%, rgba(0, 0, 0, 0.65) 100%);
+}
+
+/* Film grain: a tiny SVG noise tile, blended over everything (including the card). */
+.login-grain {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  opacity: 0.1;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.login-brand {
+  position: absolute;
+  left: 18px;
+  top: 16px;
+  z-index: 4;
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: #8e8ba5;
+}
+
+/* ---------- card ---------- */
+
+.login-wrap {
+  position: relative;
+  z-index: 3;
   width: 100%;
-  max-width: 420px;
-  padding: 2.5rem 2rem;
-  border-radius: 20px;
-  text-align: center;
-  background: var(--card-bg);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow-card);
-  animation: login-in 0.4s ease both;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --glow, --sx and --sy are written by LightScene. */
+.login-card {
+  --glow: 0;
+  --sx: 50%;
+  --sy: 0px;
+
+  position: relative;
+  box-sizing: border-box;
+  padding: 1.6rem;
+  border-radius: 16px;
+  overflow: hidden;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(var(--lc), calc(0.1 + var(--glow) * 0.45));
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  box-shadow:
+    0 0 calc(18px + var(--glow) * 50px) rgba(var(--lc), calc(var(--glow) * 0.22)),
+    inset 0 1px 0 rgba(var(--lc), calc(0.1 + var(--glow) * 0.4));
+  animation: login-in 0.5s ease both;
+}
+.login-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at var(--sx) var(--sy),
+    rgba(var(--lc), calc(0.05 + var(--glow) * 0.15)),
+    rgba(var(--lc), 0) 170px
+  );
+}
+.login-card > * {
+  position: relative;
 }
 
 @keyframes login-in {
@@ -44,59 +214,211 @@
   }
 }
 
-.login-card .eyebrow {
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--accent);
-  margin: 0 0 1rem;
-}
-
 .login-card h1 {
-  font-size: 1.7rem;
-  line-height: 1.25;
-  font-weight: 650;
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 400;
+  line-height: 1.2;
   letter-spacing: -0.01em;
-  margin: 0 0 0.85rem;
-  color: var(--t-strong);
+  color: #fff;
 }
-
 .login-sub {
-  color: var(--t-muted);
-  font-size: 0.95rem;
-  line-height: 1.55;
-  margin: 0 0 1.75rem;
+  margin: 0.35rem 0 1.1rem;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: #a9a6bf;
 }
 
-.google-btn {
+/* ---------- fields ---------- */
+
+.login-field {
+  position: relative;
+  margin: 0 0 0.5rem;
+}
+.login-input {
   width: 100%;
+  height: 38px;
+  box-sizing: border-box;
+  padding: 0 0.75rem;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.28);
+  color: #f1effa;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  outline: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.login-input::placeholder {
+  color: #8e8ba5;
+}
+.login-input:hover {
+  border-color: rgba(255, 255, 255, 0.32);
+}
+.login-input:focus-visible {
+  border-color: rgb(var(--lc));
+  box-shadow: 0 0 0 3px rgba(var(--lc), 0.15);
+}
+.login-input:disabled {
+  opacity: 0.6;
+}
+.login-input--password {
+  padding-right: 3.8rem;
+}
+/* Keep the browser's autofill from painting a pale yellow box on the dark card. */
+.login-input:-webkit-autofill {
+  -webkit-text-fill-color: #f1effa;
+  caret-color: #fff;
+  box-shadow: 0 0 0 100px #15141e inset;
+}
+
+.login-show {
+  position: absolute;
+  right: 0.35rem;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 0.35rem 0.5rem;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: #e4dcff;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.login-show:hover {
+  color: #fff;
+}
+
+.login-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #b4b1c8;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.login-link:hover:not(:disabled) {
+  color: #fff;
+  text-decoration: underline;
+}
+.login-link--strong {
+  color: #e4dcff;
+}
+.login-forgot {
+  display: block;
+  margin: 0.15rem 0 0.95rem;
+}
+
+/* ---------- buttons ---------- */
+
+.login-submit {
+  width: 100%;
+  height: 38px;
+  border: none;
+  border-radius: 4px;
+  background: #ece8ff;
+  color: #15111f;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    transform 0.1s ease;
+}
+.login-submit:hover:not(:disabled) {
+  background: #fff;
+}
+.login-submit:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.login-submit:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+/* The reset screen has no "Forgot password" link, so the submit button needs its own top gap. */
+.login-field + .login-submit {
+  margin-top: 0.5rem;
+}
+
+.login-or {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.95rem 0;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: #8e8ba5;
+}
+.login-or::before,
+.login-or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.login-providers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+.login-provider {
+  height: 38px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  padding: 12px 18px;
-  border-radius: 10px;
-  border: 1px solid var(--line-strong);
-  background: var(--google-bg);
-  color: #1a1b22;
-  font-size: 14.5px;
-  font-weight: 600;
+  gap: 0.45rem;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.07);
+  color: #e9e7f6;
+  font-family: var(--mono);
+  font-size: 0.75rem;
   cursor: pointer;
   transition:
-    transform 0.1s ease,
-    box-shadow 0.15s ease;
+    background 0.15s ease,
+    border-color 0.15s ease;
 }
-.google-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 10px 24px -10px rgba(120, 90, 200, 0.45);
+.login-provider:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
 }
-.google-btn:active {
-  transform: translateY(0);
+.login-provider:disabled,
+.login-link:disabled {
+  opacity: 0.55;
+  cursor: wait;
 }
 
+/* ---------- messages ---------- */
+
+.login-error,
+.login-notice {
+  margin: 0 0 0.8rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
 .login-error {
-  margin-top: 1rem;
-  color: var(--danger);
-  font-size: 13px;
+  color: #ffb8b8;
+  background: rgba(255, 80, 80, 0.08);
+  border: 1px solid rgba(255, 100, 100, 0.28);
+}
+.login-notice {
+  color: #8ee6b4;
+  background: rgba(52, 199, 119, 0.08);
+  border: 1px solid rgba(52, 199, 119, 0.3);
+}
+
+.login-foot {
+  margin: 0.95rem 0 0;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: #8e8ba5;
 }
