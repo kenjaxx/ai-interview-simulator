@@ -1,3 +1,4 @@
+import { memo, useMemo } from "react"
 import { computeTrends } from "../lib/trends"
 
 function Sparkline({ values, color }) {
@@ -26,8 +27,8 @@ function Sparkline({ values, color }) {
 }
 
 // sessions: oldest first. Compares the most recent few sessions with the few before them.
-export default function TrendCards({ sessions }) {
-  const trends = computeTrends(sessions)
+function TrendCards({ sessions }) {
+  const trends = useMemo(() => computeTrends(sessions), [sessions])
   if (!trends) return null
 
   const { w, rows, weakest } = trends
@@ -56,3 +57,5 @@ export default function TrendCards({ sessions }) {
     </>
   )
 }
+
+export default memo(TrendCards)

@@ -1,9 +1,11 @@
+import { memo } from "react"
 import { useAuth } from "../context/AuthContext"
 import ThemeToggle from "./ThemeToggle"
 import "./Header.css"
 
 // onHistory is optional: the History link only shows on screens where leaving is safe.
-export default function Header({ onHistory }) {
+// Memoized: App passes a stable onHistory, so the header only re-renders when the user changes.
+function Header({ onHistory }) {
   const { user, signOutUser } = useAuth()
   if (!user) return null
 
@@ -40,3 +42,5 @@ export default function Header({ onHistory }) {
     </header>
   )
 }
+
+export default memo(Header)

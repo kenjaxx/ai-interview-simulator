@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useHistory } from "../hooks/useHistory"
 import { chronologicalSlice, summarizeSessions } from "../lib/trends"
 import SessionReview from "./SessionReview"
@@ -43,9 +43,14 @@ export default function HistoryScreen({ uid, onBack }) {
   }
 
   // Filters and stats apply to the sessions loaded so far (a "+" shows when more exist).
-  const visible = sessions.filter((s) => filter === "all" || s.mode === filter)
-  const chronological = chronologicalSlice(visible)
-  const { average, best } = summarizeSessions(visible)
+  // Memoized so expanding a row or confirming a delete doesn't rebuild the arrays, which would
+  // otherwise force the chart and trend cards to redraw on every click.
+  const visible = useMemo(
+    () => sessions.filter((s) => filter === "all" || s.mode === filter),
+    [sessions, filter]
+  )
+  const chronological = useMemo(() => chronologicalSlice(visible), [visible])
+  const { average, best } = useMemo(() => summarizeSessions(visible), [visible])
 
   return (
     <div className="history-shell">

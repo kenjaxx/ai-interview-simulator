@@ -1,4 +1,4 @@
-import { app } from "./firebase"
+import { app, ensureAppCheck } from "./firebase"
 import { averageScores } from "./scores"
 
 // "firebase/firestore" is loaded on first use, so it stays out of the main bundle.
@@ -7,8 +7,10 @@ import { averageScores } from "./scores"
 const SAVE_TIMEOUT_MS = 10_000
 export const HISTORY_PAGE_SIZE = 10
 
+// App Check is awaited alongside the Firestore chunk, so its token provider exists before the
+// first read or write (matters when App Check enforcement is on for Firestore).
 async function getFirestoreTools() {
-  const fs = await import("firebase/firestore")
+  const [fs] = await Promise.all([import("firebase/firestore"), ensureAppCheck()])
   return { fs, db: fs.getFirestore(app) }
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react"
+import { memo, useEffect, useRef } from "react"
 import "./Orb.css"
 
 const prefersReducedMotion = () =>
@@ -10,7 +10,10 @@ const prefersReducedMotion = () =>
 //   Because it's a subscription rather than a prop that changes, spoken words never re-render React.
 //
 // With "reduce motion" turned on in the OS, the orb never scales: its color and label still show the state.
-export default function Orb({ state, getLevel, subscribeWord }) {
+//
+// Wrapped in memo: its props (a string and two stable callbacks) only change when the state does,
+// so typing, timers and error banners elsewhere on the screen don't re-render it.
+function Orb({ state, getLevel, subscribeWord }) {
   const orbRef = useRef(null)
   const speakPulseTimeout = useRef(null)
 
@@ -68,6 +71,8 @@ export default function Orb({ state, getLevel, subscribeWord }) {
     </div>
   )
 }
+
+export default memo(Orb)
 
 function labelFor(state) {
   switch (state) {

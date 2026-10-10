@@ -1,6 +1,7 @@
 import { peekUsage } from "./rateLimit.js"
 import { HttpError } from "./errors.js"
 import { callGemini } from "./gemini.js"
+import { GEMINI_PROFILES } from "./settings.js"
 import { validateEvaluateInput, validateQuestionsInput, validateFollowUpInput } from "./validate.js"
 import {
   buildSystemPrompt,
@@ -18,6 +19,7 @@ import { parseAndNormalize, parseQuestions, parseFollowUp } from "./parse.js"
 // Every action receives { uid, body, reserve } and returns the JSON payload to send back.
 // reserve() spends one of the user's evaluations. It is only called AFTER the input is validated,
 // so bad requests never cost quota. The handler refunds the reservation if the action then fails.
+// Each action passes its own time/token profile to callGemini (see GEMINI_PROFILES).
 
 const usageOf = (reservation) => ({ remaining: reservation.remaining, limit: reservation.limit })
 
@@ -40,7 +42,8 @@ export async function questionsAction({ body, reserve }) {
     buildQuestionsSystemPrompt(input),
     buildQuestionsUserPrompt(input),
     buildQuestionsSchema(input.count),
-    0.7
+    0.7,
+    GEMINI_PROFILES.questions
   )
   return { questions: parseQuestions(rawText, input.count), usage: usageOf(reservation) }
 }
@@ -54,7 +57,8 @@ export async function followUpAction({ body, reserve }) {
     buildFollowUpSystemPrompt(input),
     buildFollowUpUserPrompt(input),
     buildFollowUpSchema(),
-    0.7
+    0.7,
+    GEMINI_PROFILES.followup
   )
   return { question: parseFollowUp(rawText), usage: usageOf(reservation) }
 }
@@ -68,7 +72,8 @@ export async function evaluateAction({ body, reserve }) {
     buildSystemPrompt(role, seniority),
     buildUserPrompt(qas),
     buildEvaluationSchema(qas.length),
-    0.3
+    0.3,
+    GEMINI_PROFILES.evaluate
   )
   return { ...parseAndNormalize(rawText, qas.length), usage: usageOf(reservation) }
 }

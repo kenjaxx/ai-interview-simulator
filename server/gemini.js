@@ -3,9 +3,7 @@ import {
   MODEL,
   FALLBACK_MODEL,
   geminiUrl,
-  MAX_OUTPUT_TOKENS,
-  TOTAL_BUDGET_MS,
-  ATTEMPT_TIMEOUT_MS,
+  GEMINI_PROFILES,
   MIN_RETRY_WINDOW_MS,
   SHORT_RETRY_SEC,
 } from "./settings.js"
@@ -26,11 +24,13 @@ function parseRetryDelaySeconds(errorBody) {
 }
 
 // One attempt against one model. Throws an HttpError that says whether it's refundable and retryable.
-async function callGeminiOnce(model, systemPrompt, userPrompt, schema, temperature, timeoutMs) {
+async function callGeminiOnce(model, systemPrompt, userPrompt, schema, temperature, maxOutputTokens, timeoutMs) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
+  // A timeout is worth one more try (on the fallback model, if there is time left): a slow model is
+  // often a busy model. It is still only refunded up to the daily cap, since we can't tell whose fault it was.
   const timedOut = () =>
-    new HttpError(504, "The AI took too long to respond. Please retry.", {}, { refund: "capped" })
+    new HttpError(504, "The AI took too long to respond. Please retry.", {}, { refund: "capped", retryable: true })
 
   try {
     let res
@@ -46,7 +46,7 @@ async function callGeminiOnce(model, systemPrompt, userPrompt, schema, temperatu
             responseMimeType: "application/json",
             responseSchema: schema,
             temperature,
-            maxOutputTokens: MAX_OUTPUT_TOKENS,
+            maxOutputTokens,
           },
         }),
       })
@@ -120,15 +120,31 @@ async function callGeminiOnce(model, systemPrompt, userPrompt, schema, temperatu
   }
 }
 
-// Tries the primary model; on a transient failure waits briefly and tries ONE more time
-// (on the fallback model if it's different), all inside one overall time budget.
-export async function callGemini(systemPrompt, userPrompt, schema, temperature = 0.3) {
-  const deadline = Date.now() + TOTAL_BUDGET_MS
+// Tries the primary model; on a transient failure (including a timeout) waits briefly and tries ONE
+// more time (on the fallback model if it's different), all inside the profile's time budget.
+// profile: one of GEMINI_PROFILES (token limit, per-attempt timeout, total budget).
+export async function callGemini(
+  systemPrompt,
+  userPrompt,
+  schema,
+  temperature = 0.3,
+  profile = GEMINI_PROFILES.evaluate
+) {
+  const { maxOutputTokens, attemptTimeoutMs, totalBudgetMs } = profile
+  const deadline = Date.now() + totalBudgetMs
   const models = [MODEL, FALLBACK_MODEL]
   const sameModel = MODEL === FALLBACK_MODEL
 
   try {
-    return await callGeminiOnce(models[0], systemPrompt, userPrompt, schema, temperature, ATTEMPT_TIMEOUT_MS)
+    return await callGeminiOnce(
+      models[0],
+      systemPrompt,
+      userPrompt,
+      schema,
+      temperature,
+      maxOutputTokens,
+      attemptTimeoutMs
+    )
   } catch (err) {
     if (!(err instanceof HttpError) || !err.retryable) throw err
 
@@ -148,7 +164,8 @@ export async function callGemini(systemPrompt, userPrompt, schema, temperature =
       userPrompt,
       schema,
       temperature,
-      Math.min(ATTEMPT_TIMEOUT_MS, remaining)
+      maxOutputTokens,
+      Math.min(attemptTimeoutMs, remaining)
     )
   }
 }

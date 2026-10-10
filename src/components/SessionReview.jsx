@@ -1,3 +1,4 @@
+import { memo, useMemo } from "react"
 import { averageScores, entryOverall } from "../lib/scores"
 import { splitByFillers } from "../lib/fillers"
 import "./SessionReview.css"
@@ -9,15 +10,21 @@ const STAR_PARTS = [
   { key: "result", letter: "R", label: "Result" },
 ]
 
+// One shared empty object. A fresh `{}` default on every render would defeat React.memo.
+const NO_RETRIES = {}
+
 // Score cards plus one review card per answer. Used by the summary screen and the history view.
 //   retries      optional map of answer index -> retry result (summary screen only)
 //   sessionMode  "practice" | "full", used to flag retries scored differently from the original
-export default function SessionReview({ session, retries = {}, sessionMode }) {
+//
+// Everything here is memoized: props are stable references (state from the interview hook or from
+// the history cache), so typing, timers and quota updates elsewhere never re-render the review.
+function SessionReview({ session, retries = NO_RETRIES, sessionMode }) {
+  const avg = useMemo(() => averageScores(session), [session])
+
   if (!session?.length) {
     return <p className="review-empty">No answers were recorded for this session.</p>
   }
-
-  const avg = averageScores(session)
 
   return (
     <>
@@ -45,8 +52,10 @@ export default function SessionReview({ session, retries = {}, sessionMode }) {
   )
 }
 
-// A short "how is this scored?" explanation that covers both modes.
-function ScoreHelp() {
+export default memo(SessionReview)
+
+// A short "how is this scored?" explanation that covers both modes. Static, so it never re-renders.
+const ScoreHelp = memo(function ScoreHelp() {
   return (
     <details className="score-help">
       <summary>How is this scored?</summary>
@@ -75,12 +84,13 @@ function ScoreHelp() {
       </p>
     </details>
   )
-}
+})
 
 // Shows an answer with possible filler words marked, so you can see exactly what to cut.
-function HighlightedAnswer({ text, showNote = false }) {
-  const parts = splitByFillers(text)
-  const hasFillers = parts.some((p) => p.filler)
+// The regex work in splitByFillers only reruns when the text changes.
+const HighlightedAnswer = memo(function HighlightedAnswer({ text, showNote = false }) {
+  const parts = useMemo(() => splitByFillers(text), [text])
+  const hasFillers = useMemo(() => parts.some((p) => p.filler), [parts])
 
   return (
     <>
@@ -100,11 +110,11 @@ function HighlightedAnswer({ text, showNote = false }) {
       )}
     </>
   )
-}
+})
 
 // star: { situation, task, action, result } | null. Null means the question wasn't behavioral
 // (or the session predates this feature), so nothing is shown.
-function StarRow({ star }) {
+const StarRow = memo(function StarRow({ star }) {
   if (!star) return null
   const missing = STAR_PARTS.filter((p) => !star[p.key]).map((p) => p.label)
 
@@ -121,9 +131,9 @@ function StarRow({ star }) {
       {missing.length > 0 && <p className="star-missing">Missing: {missing.join(", ")}</p>}
     </div>
   )
-}
+})
 
-function RetryComparison({ original, retry, sameMode }) {
+const RetryComparison = memo(function RetryComparison({ original, retry, sameMode }) {
   const before = entryOverall(original)
   const after = entryOverall(retry)
   const delta = after - before
@@ -161,9 +171,9 @@ function RetryComparison({ original, retry, sameMode }) {
       <p className="review-tip">Tip: {evaluation.improvementTip}</p>
     </div>
   )
-}
+})
 
-function ReviewCard({ entry, index, retry, sessionMode }) {
+const ReviewCard = memo(function ReviewCard({ entry, index, retry, sessionMode }) {
   const { evaluation, metrics = {}, inputMethod } = entry
   const typed = inputMethod === "text"
 
@@ -227,4 +237,4 @@ function ReviewCard({ entry, index, retry, sessionMode }) {
       )}
     </div>
   )
-}
+})

@@ -1,8 +1,9 @@
-import { useState } from "react"
+import { memo, useState } from "react"
 import { SERIES } from "../lib/trends"
 
-// sessions: oldest first.
-export default function ProgressChart({ sessions }) {
+// sessions: oldest first. Memoized: HistoryScreen passes a memoized array, so the chart only
+// redraws when the visible sessions change, not when a row is expanded or a delete is confirmed.
+function ProgressChart({ sessions }) {
   const [hidden, setHidden] = useState(() => new Set())
 
   if (sessions.length < 2) {
@@ -79,3 +80,5 @@ export default function ProgressChart({ sessions }) {
     </div>
   )
 }
+
+export default memo(ProgressChart)

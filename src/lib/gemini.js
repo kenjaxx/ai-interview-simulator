@@ -67,11 +67,7 @@ const isTransient = (err) => err && (err.status === 0 || err.status >= 500)
 
 const usageIsValid = (b) => typeof b?.usage?.remaining === "number" && typeof b?.usage?.limit === "number"
 
-// How many AI evaluations are left today. Spends nothing. Retries once on a transient failure.
-// Returns { remaining, limit, globalExhausted }, or null in mock mode.
-export async function fetchUsage() {
-  if (MOCK_MODE) return null
-
+async function loadUsage() {
   try {
     let body
     try {
@@ -87,6 +83,26 @@ export async function fetchUsage() {
     lastUsageError = messageForError(err)
     throw err
   }
+}
+
+// Usage lookups currently in flight, keyed by uid. Callers that ask while a lookup is already
+// running (a double effect in StrictMode, a fast screen change, a Retry click) share its result.
+const usageInflight = new Map()
+
+// How many AI evaluations are left today. Spends nothing. Retries once on a transient failure.
+// Returns { remaining, limit, globalExhausted }, or null in mock mode.
+// How often to call this is decided by the caller (see useQuota), which caches the result.
+export function fetchUsage(uid = "") {
+  if (MOCK_MODE) return Promise.resolve(null)
+
+  const existing = usageInflight.get(uid)
+  if (existing) return existing
+
+  const request = loadUsage().finally(() => {
+    if (usageInflight.get(uid) === request) usageInflight.delete(uid)
+  })
+  usageInflight.set(uid, request)
+  return request
 }
 
 // Asks Gemini for interview questions tailored to a pasted job description. Costs one AI evaluation.
