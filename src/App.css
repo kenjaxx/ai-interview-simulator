@@ -350,7 +350,12 @@
   background-clip: text;
   color: transparent;
 }
+/* The caption under a score. It is plain text, so it is a <p>, not a <label>.
+   The `label` selector is kept only until every score card has been migrated. */
+.score-card .score-label,
 .score-card label {
+  display: block;
+  margin: 0;
   font-size: 12px;
   color: var(--t-dim);
 }

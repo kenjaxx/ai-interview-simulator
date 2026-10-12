@@ -82,12 +82,11 @@ export default function App() {
   if (!user) return <Login />
 
   if (screen === "history") {
+    // HistoryScreen renders the page's single <h1> (marked data-screen-heading, so ScreenFocus
+    // moves focus to it once the lazy chunk has loaded).
     return (
       <div className="page" key="history">
         <Header />
-        <h2 className="sr-only" tabIndex={-1} data-screen-heading>
-          Session history
-        </h2>
         <LazyScreen fallback={<InlineFallback />}>
           <HistoryScreen uid={user.uid} onBack={closeHistory} />
         </LazyScreen>

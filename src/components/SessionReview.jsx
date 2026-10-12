@@ -29,15 +29,15 @@ function SessionReview({ session, retries = NO_RETRIES, sessionMode, showScores 
         <div className="score-row">
           <div className="score-card">
             <span>{avg.content}</span>
-            <label>Content</label>
+            <p className="score-label">Content</p>
           </div>
           <div className="score-card">
             <span>{avg.clarity}</span>
-            <label>Clarity</label>
+            <p className="score-label">Clarity</p>
           </div>
           <div className="score-card">
             <span>{avg.confidence}</span>
-            <label>Confidence</label>
+            <p className="score-label">Confidence</p>
           </div>
         </div>
       )}

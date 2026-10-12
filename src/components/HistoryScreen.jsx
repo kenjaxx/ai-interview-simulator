@@ -56,7 +56,10 @@ export default function HistoryScreen({ uid, onBack }) {
   return (
     <div className="history-shell">
       <div className="history-head">
-        <h1>Your progress</h1>
+        {/* The page's only <h1>. ScreenFocus moves focus here when the screen opens. */}
+        <h1 tabIndex={-1} data-screen-heading>
+          Your progress
+        </h1>
         <div style={{ display: "flex", gap: 8 }}>
           {status === "ready" && (
             <button className="secondary-btn" onClick={() => loadFirstPage(true)}>
@@ -117,15 +120,15 @@ export default function HistoryScreen({ uid, onBack }) {
                     {visible.length}
                     {hasMore ? "+" : ""}
                   </span>
-                  <label>Sessions</label>
+                  <p className="score-label">Sessions</p>
                 </div>
                 <div className="score-card">
                   <span>{average}</span>
-                  <label>Average</label>
+                  <p className="score-label">Average</p>
                 </div>
                 <div className="score-card">
                   <span>{best}</span>
-                  <label>Best</label>
+                  <p className="score-label">Best</p>
                 </div>
               </div>
 
