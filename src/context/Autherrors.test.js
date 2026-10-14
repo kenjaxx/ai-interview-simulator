@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { messageForAuthError } from "../lib/AuthErrors"
+import { messageForAuthError } from "../lib/authErrors"
 
 describe("messageForAuthError", () => {
   it("stays silent when the user closes the popup", () => {
