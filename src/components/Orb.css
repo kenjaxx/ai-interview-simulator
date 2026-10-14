@@ -15,21 +15,22 @@
   will-change: transform;
 }
 
+/* Colors come from the theme tokens in index.css, so they follow light and dark mode. */
 .orb--idle {
-  background: #4a4a52;
+  background: var(--orb-idle);
 }
 
 .orb--listening {
-  background: #3b82c4;
+  background: var(--orb-listening);
 }
 
 .orb--thinking {
-  background: #7c6fd8;
+  background: var(--orb-thinking);
   animation: orb-think 1.1s ease-in-out infinite;
 }
 
 .orb--speaking {
-  background: #d1633a;
+  background: var(--orb-speaking);
 }
 
 @keyframes orb-think {

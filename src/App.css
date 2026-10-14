@@ -1,5 +1,6 @@
 .page {
-  min-height: 100vh;
+  min-height: 100vh; /* fallback for browsers without svh */
+  min-height: 100svh; /* small viewport height: doesn't jump when the mobile address bar hides */
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -16,6 +17,7 @@
 
 .page-loading {
   min-height: 100vh;
+  min-height: 100svh;
   width: 100%;
   display: flex;
   align-items: center;
@@ -205,7 +207,9 @@
 /* ---------- Interview screen ---------- */
 
 .interview-shell {
+  /* 57px is the sticky header's height. svh keeps the centered layout steady on mobile. */
   min-height: calc(100vh - 57px);
+  min-height: calc(100svh - 57px);
   width: 100%;
   max-width: 640px;
   display: flex;

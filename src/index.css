@@ -50,6 +50,14 @@
   --s-clarity: #60a5fa;
   --s-confidence: #34c777;
 
+  /* Orb state colors. Each needs about 3:1 or better against --app-bg (the orb is a graphical
+     object). "Thinking" pulses down to 70% opacity, so its base color is chosen to still clear
+     that at the dimmest frame. */
+  --orb-idle: #6b6b78;
+  --orb-listening: #3b82c4;
+  --orb-thinking: #8f84e6;
+  --orb-speaking: #d1633a;
+
   color-scheme: dark;
 }
 
@@ -103,6 +111,13 @@
   --s-clarity: #2563eb;
   --s-confidence: #16a34a;
 
+  /* Same states, tuned for a light background: dark enough to hold 3:1 against --app-bg,
+     including "thinking" at its 70% opacity frame. */
+  --orb-idle: #6b6b78;
+  --orb-listening: #3b82c4;
+  --orb-thinking: #5b4cc4;
+  --orb-speaking: #d1633a;
+
   color-scheme: light;
 }
 
@@ -139,6 +154,7 @@ body {
   width: 100%;
   margin: 0 auto;
   text-align: center;
+  min-height: 100vh;
   min-height: 100svh;
   display: flex;
   flex-direction: column;
