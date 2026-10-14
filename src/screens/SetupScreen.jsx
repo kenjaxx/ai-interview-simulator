@@ -4,6 +4,7 @@ import Stepper from "../components/setup/Stepper"
 import RoleStep from "../components/setup/RoleStep"
 import ModeStep from "../components/setup/ModeStep"
 import StartStep from "../components/setup/StartStep"
+import ResumeCard from "../components/setup/ResumeCard"
 import "../components/setup/setup.css"
 
 const STEP_TITLES = ["Choose your role", "Choose how to practice", "Review and start"]
@@ -50,6 +51,13 @@ export default function SetupScreen({ setup, onHistory }) {
       </header>
 
       <div className="setup-card">
+        <ResumeCard
+          draft={setup.draft}
+          onResume={setup.resumeDraft}
+          onDiscard={setup.discardDraft}
+          disabled={setup.starting}
+        />
+
         {setup.notice && (
           <p className="setup-notice" role="status">
             {setup.notice}

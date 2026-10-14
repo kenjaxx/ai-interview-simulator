@@ -14,7 +14,8 @@ import { useFinalScoring } from "./useFinalScoring"
 import { createStartInterview } from "./startInterview"
 import { createInterviewControls } from "./interviewControls"
 import { buildInterviewApi } from "./buildInterviewApi"
-
+import { useUnloadGuard } from "./useUnloadGuard"
+import { saveDraft, loadDraft, clearDraft } from "../lib/draft"
 // Runs an interview: the question loop. Everything else is delegated:
 //   useSetupForm        what the user picked on the setup screen
 //   useQuota            daily AI allowance
@@ -111,12 +112,35 @@ export function useInterview({ user, authLoading }) {
     isFollowUpRef,
     clearFollowUp,
     resetFollowUps,
+    getFollowUpsUsed,
+    restoreFollowUps,
     cancelPending,
     canAskFollowUp,
     askFollowUp,
   } = useFollowUps({ interviewIdRef, quotaRef, applyUsage })
 
   const setupMode = speech.voiceOk && form.inputPref === "voice" ? "voice" : "text"
+
+
+
+    // An interrupted interview from this tab, offered on the setup screen. Read from sessionStorage
+  // only while the setup screen is showing. draftTick forces a re-read after Discard.
+  const [draftTick, setDraftTick] = useState(0)
+  const savedDraft = useMemo(
+    () => (uid && screen === "setup" ? loadDraft(uid) : null),
+    [uid, screen, draftTick]
+  )
+  const draftSummary = useMemo(
+    () =>
+      savedDraft && {
+        role: savedDraft.config.role,
+        seniority: savedDraft.config.seniority,
+        answered: savedDraft.qas.length,
+        total: savedDraft.questions.length,
+        finished: savedDraft.finished,
+      },
+    [savedDraft]
+  )
 
   // ---------- speech callbacks ----------
 
@@ -218,6 +242,7 @@ export function useInterview({ user, authLoading }) {
 
   // Tears everything down: speech, recognition, mic stream, and any in-flight scoring.
   const restart = useCallback(() => {
+    clearDraft()
     interviewIdRef.current++
     stopSpeaking()
     stopListening()
@@ -409,6 +434,56 @@ export function useInterview({ user, authLoading }) {
     beginSession,
   })
 
+
+
+
+    // Puts an interrupted interview back exactly where it was. Runs from a click, so the browser
+  // allows the question to be read aloud and the mic to open.
+  const resumeInterview = () => {
+    const draft = savedDraft
+    if (!draft || starting) return
+
+    interviewIdRef.current++ // anything still in flight from before is now stale
+    const chosenInput = draft.inputMode === "voice" && speech.voiceOk ? "voice" : "text"
+
+    sessionConfigRef.current = draft.config
+    inputModeRef.current = chosenInput
+    qasRef.current = draft.qas
+    questionsRef.current = draft.questions
+    questionIndexRef.current = draft.questionIndex
+    resetRetry()
+    resetSave()
+    restoreFollowUps({ used: draft.followUpsUsed, active: draft.isFollowUp })
+
+    setInputMode(chosenInput)
+    setSessionMode(draft.config.mode)
+    setQuestionIndex(draft.questionIndex)
+    setQuestionTotal(draft.questions.length)
+    setAnsweredCount(draft.qas.length)
+    setSession([])
+    setSessionMeta(null)
+    setOverallSummary("")
+    setUsage(null)
+    setError(null)
+    setNotice(null)
+    setSessionNote(draft.note)
+    setAwaitingFinalScore(false)
+    setReviewDraft(null)
+    setScreen("interview")
+
+    if (draft.finished) {
+      // Every answer was already in; the refresh happened while scoring. Score it again.
+      runFinalScoring()
+      return
+    }
+    presentQuestion(draft.currentQuestion)
+  }
+
+  const discardDraft = () => {
+    clearDraft()
+    setDraftTick((t) => t + 1)
+  }
+
   // If the user signs out mid-interview, App stays mounted, so the question would keep being read
   // aloud and the mic would start listening behind the login screen. Tear everything down instead.
   useEffect(() => {
@@ -423,6 +498,58 @@ export function useInterview({ user, authLoading }) {
     () => findWeakestIndex(session, new Set(Object.keys(retryResults).map(Number))),
     [session, retryResults]
   )
+
+
+
+
+
+    // Keep the draft in step with the interview. Refs are read inside the effect (not during render),
+  // and the effect re-runs on every change that matters: a new question, a new answer, a follow-up
+  // starting or ending, and the final scoring beginning. Retries are not saved.
+  useEffect(() => {
+    if (!uid) return
+    if (screen === "summary") {
+      clearDraft() // the interview is over, nothing left to resume
+      return
+    }
+    if (screen !== "interview" || retryIndex !== null || !currentQuestion) return
+
+    saveDraft({
+      uid,
+      config: sessionConfigRef.current,
+      questions: questionsRef.current,
+      questionIndex: questionIndexRef.current,
+      qas: qasRef.current,
+      currentQuestion,
+      isFollowUp,
+      followUpsUsed: getFollowUpsUsed(),
+      inputMode,
+      note: sessionNote,
+      finished: awaitingFinalScore,
+    })
+  }, [
+    uid,
+    screen,
+    retryIndex,
+    currentQuestion,
+    questionIndex,
+    answeredCount,
+    isFollowUp,
+    inputMode,
+    sessionNote,
+    awaitingFinalScore,
+    getFollowUpsUsed,
+  ])
+
+  // Warn before the tab closes or reloads: during an interview, and on the summary while the
+  // session is still being saved or failed to save (leaving then loses it).
+  useUnloadGuard(
+    screen === "interview" || (screen === "summary" && (saveStatus === "saving" || saveStatus === "error"))
+  )
+
+
+
+
 
   return buildInterviewApi({
     screen,
@@ -441,6 +568,9 @@ export function useInterview({ user, authLoading }) {
     setupMode,
     notice,
     startInterview,
+    draftSummary,
+    resumeInterview,
+    discardDraft,
     orbState,
     currentQuestion,
     questionIndex,

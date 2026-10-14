@@ -54,6 +54,9 @@ export function buildInterviewApi(c) {
       notice: c.notice,
       maxFollowUps: MAX_FOLLOW_UPS,
       start: c.startInterview,
+      draft: c.draftSummary,
+      resumeDraft: c.resumeInterview,
+      discardDraft: c.discardDraft,
     },
 
     interview: {

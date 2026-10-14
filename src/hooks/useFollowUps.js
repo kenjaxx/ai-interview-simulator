@@ -29,6 +29,19 @@ export function useFollowUps({ interviewIdRef, quotaRef, applyUsage }) {
     runRef.current++
   }, [])
 
+  // How many follow-ups have been asked so far (saved in the interview draft).
+  const getFollowUpsUsed = useCallback(() => usedRef.current, [])
+
+  // Puts the follow-up state back after a refresh: how many were used, and whether the question
+  // on screen is itself a follow-up.
+  const restoreFollowUps = useCallback(({ used, active }) => {
+    usedRef.current = used
+    runRef.current++ // ignore anything that was still in flight
+    isFollowUpRef.current = active
+    setIsFollowUp(active)
+    setPreparingFollowUp(false)
+  }, [])
+
   // Ignore a follow-up that is still being generated.
   const cancelPending = useCallback(() => {
     runRef.current++
@@ -98,6 +111,8 @@ export function useFollowUps({ interviewIdRef, quotaRef, applyUsage }) {
     isFollowUpRef,
     clearFollowUp,
     resetFollowUps,
+    getFollowUpsUsed,
+    restoreFollowUps,
     cancelPending,
     canAskFollowUp,
     askFollowUp,
