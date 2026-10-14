@@ -80,6 +80,8 @@ export function buildInterviewApi(c) {
       subscribeTranscript: speech.subscribeTranscript,
       getTranscript: speech.getTranscript,
       finishAnswer: speech.finishAnswer,
+      reviewDraft: c.reviewDraft,
+      submitReview: controls.submitReview,
       submitTyped: controls.submitTyped,
       retry: controls.retry,
       replay: controls.replay,

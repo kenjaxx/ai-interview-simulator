@@ -20,7 +20,8 @@ export function createInterviewControls(d) {
     d.presentQuestion(d.currentQuestionRef.current)
   }
 
-  // Throws away what was said so far and starts listening again, without re-reading the question.
+  // Throws away what was said so far (or the transcript being reviewed) and starts listening
+  // again, without re-reading the question. beginAnswering also clears any review draft.
   const reRecord = () => {
     d.setError(null)
     d.stopSpeaking()
@@ -31,6 +32,7 @@ export function createInterviewControls(d) {
   const skip = () => {
     d.stopSpeaking()
     d.stopListening()
+    d.setReviewDraft(null)
     d.setError(null)
     d.advance()
   }
@@ -44,6 +46,7 @@ export function createInterviewControls(d) {
   const endEarly = () => {
     d.stopSpeaking()
     d.stopListening()
+    d.setReviewDraft(null)
     d.setError(null)
     d.cancelPending()
     d.clearFollowUp()
@@ -53,6 +56,7 @@ export function createInterviewControls(d) {
   const switchToText = () => {
     d.stopListening()
     d.releaseMic()
+    d.setReviewDraft(null)
     d.inputModeRef.current = "text"
     d.setInputMode("text")
     d.setError(null)
@@ -79,6 +83,18 @@ export function createInterviewControls(d) {
     d.answerRouterRef.current(text, { wpm: 0, fillerCount: countFillers(text), responseDelaySec: 0 }, "text")
   }
 
+  // Sends a reviewed voice answer on to scoring. The text may have been edited, but the speech
+  // metrics (pace, fillers, delay) stay exactly as they were measured from the voice, so editing
+  // the transcript can't be used to change them. The text itself still counts as a voice answer.
+  // The edited text lives in the TranscriptReview component, so keystrokes don't re-render the app.
+  const submitReview = (rawText) => {
+    const draft = d.reviewDraft
+    const text = rawText.trim()
+    if (!draft || !text) return
+    d.setReviewDraft(null)
+    d.answerRouterRef.current(text, draft.metrics, "voice")
+  }
+
   const scoreWithPractice = () => {
     if (d.isRetryActive()) d.runRetryScoring("practice")
     else d.runFinalScoring("practice")
@@ -94,6 +110,7 @@ export function createInterviewControls(d) {
     switchToText,
     switchToVoice,
     submitTyped,
+    submitReview,
     scoreWithPractice,
   }
 }

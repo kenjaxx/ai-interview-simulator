@@ -1,0 +1,39 @@
+.transcript-review {
+  gap: 0.75rem;
+}
+
+.transcript-review-head {
+  width: 100%;
+  text-align: left;
+}
+
+.transcript-review-title {
+  margin: 0 0 2px;
+  font-size: 1rem;
+  font-weight: 650;
+  color: var(--t-head);
+}
+
+.transcript-review-sub {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--t-muted);
+}
+
+.transcript-review-note {
+  margin: 0;
+  width: 100%;
+  text-align: left;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--t-faint);
+}
+
+.transcript-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+}

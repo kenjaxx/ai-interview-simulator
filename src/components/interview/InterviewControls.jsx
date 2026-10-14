@@ -8,18 +8,29 @@ import "./interview-ui.css"
 // interview: the `interview` object from useInterview().
 export default function InterviewControls({ interview }) {
   const compact = useMediaQuery("(max-width: 520px)")
-  const { isRetry, inputMode, isListening, isFollowUp, ttsSupported, voiceOk, answeredCount } = interview
+  const { isRetry, inputMode, isListening, isFollowUp, ttsSupported, voiceOk, answeredCount, reviewDraft } =
+    interview
+  // True while the transcript review box is on screen.
+  const reviewing = !!reviewDraft
 
   // collapsible: moves into the "More" menu on narrow screens.
+  // While reviewing, "Replay question" would throw away the edited text, and "Type instead" is
+  // redundant (the transcript is already editable), so both are disabled.
   const actions = [
-    { id: "replay", label: "Replay question", onClick: interview.replay, disabled: !ttsSupported, collapsible: true },
+    {
+      id: "replay",
+      label: "Replay question",
+      onClick: interview.replay,
+      disabled: !ttsSupported || reviewing,
+      collapsible: true,
+    },
   ]
   if (inputMode === "voice") {
     actions.push({
       id: "rerecord",
       label: "Re-record",
       onClick: interview.reRecord,
-      disabled: !isListening,
+      disabled: !isListening && !reviewing,
       collapsible: true,
     })
   }
@@ -27,7 +38,13 @@ export default function InterviewControls({ interview }) {
     actions.push({ id: "skip", label: isFollowUp ? "Skip follow-up" : "Skip", onClick: interview.skip })
   }
   if (inputMode === "voice") {
-    actions.push({ id: "type", label: "Type instead", onClick: interview.switchToText, collapsible: true })
+    actions.push({
+      id: "type",
+      label: "Type instead",
+      onClick: interview.switchToText,
+      disabled: reviewing,
+      collapsible: true,
+    })
   } else if (voiceOk) {
     actions.push({ id: "voice", label: "Use voice", onClick: interview.switchToVoice, collapsible: true })
   }

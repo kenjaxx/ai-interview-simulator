@@ -53,6 +53,9 @@ export function useInterview({ user, authLoading }) {
   // Locked in when the interview starts, so toggling the switch mid-interview
   // never changes how the session already in progress gets scored.
   const [sessionMode, setSessionMode] = useState("practice")
+  // A spoken answer waiting for the user to check it: { text, metrics }, or null.
+  // The answer is only scored after the user confirms it (see submitReview in interviewControls.js).
+  const [reviewDraft, setReviewDraft] = useState(null)
 
   const promptShownAtRef = useRef(null)
   const questionsRef = useRef([])
@@ -117,6 +120,13 @@ export function useInterview({ user, authLoading }) {
 
   // ---------- speech callbacks ----------
 
+  // User pressed "I'm done" and something was captured. Instead of scoring straight away, hold the
+  // transcript (with its measured speech metrics) so the user can check and correct it first.
+  const handleVoiceFinal = useCallback((answerText, metrics) => {
+    setOrbState("idle")
+    setReviewDraft({ text: answerText, metrics })
+  }, [])
+
   // User pressed "I'm done" (or the backstop fired) but nothing was captured.
   const handleEmptyAnswer = useCallback(() => {
     setOrbState("idle")
@@ -134,6 +144,9 @@ export function useInterview({ user, authLoading }) {
   // Starts collecting an answer for the current question. In voice mode that means listening;
   // in text mode the textarea is already on screen, so there's nothing to start.
   const beginAnswering = useCallback(() => {
+    // A new attempt replaces any transcript that was waiting for review.
+    setReviewDraft(null)
+
     // Response delay is measured from when the interviewer finishes speaking,
     // not from when the question started being read aloud.
     promptShownAtRef.current = Date.now()
@@ -147,16 +160,17 @@ export function useInterview({ user, authLoading }) {
     startListening({
       promptShownAt: promptShownAtRef.current,
       lang: form.speechLang,
-      onFinal: (answerText, metrics) => answerRouterRef.current(answerText, metrics, "voice"),
+      onFinal: handleVoiceFinal,
       onEmpty: handleEmptyAnswer,
       onError: handleListenError,
     })
-  }, [startListening, form.speechLang, handleEmptyAnswer, handleListenError])
+  }, [startListening, form.speechLang, handleVoiceFinal, handleEmptyAnswer, handleListenError])
 
   const presentQuestion = useCallback(
     (question) => {
       // Stop listening first, otherwise the recognizer would transcribe the question being read aloud.
       stopListening()
+      setReviewDraft(null)
       setCurrentQuestion(question)
       currentQuestionRef.current = question
       setOrbState("speaking")
@@ -231,6 +245,7 @@ export function useInterview({ user, authLoading }) {
     setSessionNote(null)
     setStarting(false)
     setAwaitingFinalScore(false)
+    setReviewDraft(null)
   }, [stopSpeaking, stopListening, releaseMic, resetFollowUps, resetRetry, resetSave, clearFollowUp])
 
   // forceMode lets the user re-score a finished interview locally when the AI is unavailable.
@@ -269,6 +284,7 @@ export function useInterview({ user, authLoading }) {
   // Always leaves any follow-up state behind.
   const advance = useCallback(() => {
     clearFollowUp()
+    setReviewDraft(null)
     const next = questionIndexRef.current + 1
     if (next >= questionsRef.current.length) {
       finishInterview()
@@ -324,6 +340,7 @@ export function useInterview({ user, authLoading }) {
   const controls = createInterviewControls({
     awaitingFinalScore,
     isSpeaking,
+    reviewDraft,
     answerRouterRef,
     currentQuestionRef,
     inputModeRef,
@@ -344,6 +361,7 @@ export function useInterview({ user, authLoading }) {
     setError,
     setInputMode,
     setOrbState,
+    setReviewDraft,
   })
 
   // Applies a freshly built question list: resets all per-interview state and asks question one.
@@ -370,6 +388,7 @@ export function useInterview({ user, authLoading }) {
     setNotice(null)
     setSessionNote(note)
     setAwaitingFinalScore(false)
+    setReviewDraft(null)
     clearFollowUp()
     setScreen("interview")
 
@@ -434,6 +453,7 @@ export function useInterview({ user, authLoading }) {
     sessionNote,
     isFollowUp,
     preparingFollowUp,
+    reviewDraft,
     retryIndex,
     controls,
     session,

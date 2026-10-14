@@ -2,6 +2,7 @@ import Orb from "../components/Orb"
 import Header from "../components/Header"
 import LiveTranscript from "../components/LiveTranscript"
 import TypingPanel from "../components/TypingPanel"
+import TranscriptReview from "../components/TranscriptReview"
 import AnswerTimer from "../components/AnswerTimer"
 import DoneShortcut from "../components/DoneShortcut"
 import InterviewProgress from "../components/interview/InterviewProgress"
@@ -19,8 +20,10 @@ export default function InterviewScreen({ interview }) {
     error,
     isFollowUp,
     preparingFollowUp,
+    reviewDraft,
   } = interview
   const busy = scoring || preparingFollowUp
+  const reviewing = !!reviewDraft
 
   let progress
   if (preparingFollowUp) {
@@ -84,13 +87,24 @@ export default function InterviewScreen({ interview }) {
             <LiveTranscript subscribe={interview.subscribeTranscript} getSnapshot={interview.getTranscript} />
             <AnswerTimer key={questionKey} />
             <button className="finish-btn" onClick={interview.finishAnswer}>
-              ✓ I'm done — submit answer
+              ✓ I'm done — review my answer
             </button>
             <p className="shortcut-hint">
               Or press <kbd>Space</kbd> or <kbd>Enter</kbd>
             </p>
             <DoneShortcut onDone={interview.finishAnswer} />
           </div>
+        )}
+
+        {!busy && inputMode === "voice" && reviewing && (
+          <TranscriptReview
+            key={`review-${questionKey}`}
+            initialText={reviewDraft.text}
+            onSubmit={interview.submitReview}
+            onRecordAgain={interview.reRecord}
+            maxLength={MAX_ANSWER_CHARS}
+            describedBy="current-question"
+          />
         )}
 
         {!busy && inputMode === "text" && (
