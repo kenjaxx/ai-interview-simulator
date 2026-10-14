@@ -1,3 +1,6 @@
+// An answer whose overall score is below this counts as "weak" on the summary screen.
+export const WEAK_BELOW = 70
+
 // Averages per-question evaluations. Works for a live session and for one loaded from Firestore.
 export function averageScores(session) {
   if (!session?.length) return { content: 0, clarity: 0, confidence: 0, overall: 0 }
@@ -12,6 +15,11 @@ export function averageScores(session) {
 export function entryOverall(entry) {
   const e = entry.evaluation
   return Math.round((e.contentScore + e.clarityScore + e.confidenceScore) / 3)
+}
+
+// True when a single answer scored below WEAK_BELOW.
+export function isWeak(entry) {
+  return entryOverall(entry) < WEAK_BELOW
 }
 
 // Index of the lowest-scoring answer, ignoring any indexes in `skip`. Returns -1 if none qualify.

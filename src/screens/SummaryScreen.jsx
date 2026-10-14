@@ -58,6 +58,7 @@ export default function SummaryScreen({ summary, onHistory }) {
           retries={summary.retryResults}
           sessionMode={summary.sessionMode}
           showScores={false}
+          collapsible
         />
 
         <div className="save-status" role="status">

@@ -29,6 +29,7 @@ export default function HistoryScreen({ uid, onBack }) {
   const toast = useToast()
 
   const [filter, setFilter] = useState("all")
+  const [roleFilter, setRoleFilter] = useState("all")
   const [openId, setOpenId] = useState(null)
   const [confirmId, setConfirmId] = useState(null)
 
@@ -43,15 +44,28 @@ export default function HistoryScreen({ uid, onBack }) {
     if (openId === id) setOpenId(null)
   }
 
+  // Every role that appears in the sessions loaded so far.
+  const roles = useMemo(() => [...new Set(sessions.map((s) => s.role).filter(Boolean))].sort(), [sessions])
+  // If the chosen role no longer exists (its last session was deleted), fall back to "all".
+  const activeRole = roles.includes(roleFilter) ? roleFilter : "all"
+
   // Filters and stats apply to the sessions loaded so far (a "+" shows when more exist).
   // Memoized so expanding a row or confirming a delete doesn't rebuild the arrays, which would
   // otherwise force the chart and trend cards to redraw on every click.
   const visible = useMemo(
-    () => sessions.filter((s) => filter === "all" || s.mode === filter),
-    [sessions, filter]
+    () =>
+      sessions.filter(
+        (s) => (filter === "all" || s.mode === filter) && (activeRole === "all" || s.role === activeRole)
+      ),
+    [sessions, filter, activeRole]
   )
   const chronological = useMemo(() => chronologicalSlice(visible), [visible])
   const { average, best } = useMemo(() => summarizeSessions(visible), [visible])
+
+  const clearFilters = () => {
+    setFilter("all")
+    setRoleFilter("all")
+  }
 
   return (
     <div className="history-shell">
@@ -94,23 +108,49 @@ export default function HistoryScreen({ uid, onBack }) {
 
       {status === "ready" && sessions.length > 0 && (
         <>
-          <div className="history-filters" role="group" aria-label="Filter by mode">
-            {FILTERS.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                className={`filter-btn ${filter === f.id ? "filter-btn--on" : ""}`}
-                aria-pressed={filter === f.id}
-                onClick={() => setFilter(f.id)}
-              >
-                {f.label}
-              </button>
-            ))}
+          <div className="history-filters">
+            <div className="history-filter-group" role="group" aria-label="Filter by mode">
+              {FILTERS.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  className={`filter-btn ${filter === f.id ? "filter-btn--on" : ""}`}
+                  aria-pressed={filter === f.id}
+                  onClick={() => setFilter(f.id)}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {roles.length > 1 && (
+              <div className="history-role">
+                <label htmlFor="history-role" className="sr-only">
+                  Filter by role
+                </label>
+                <select
+                  id="history-role"
+                  className="history-role-select"
+                  value={activeRole}
+                  onChange={(e) => setRoleFilter(e.target.value)}
+                >
+                  <option value="all">All roles</option>
+                  {roles.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           {visible.length === 0 ? (
             <p className="history-empty">
-              No sessions in this mode{hasMore ? " among the ones loaded so far" : " yet"}.
+              No sessions match these filters{hasMore ? " among the ones loaded so far" : ""}.{" "}
+              <button type="button" className="link-btn" onClick={clearFilters}>
+                Clear filters
+              </button>
             </p>
           ) : (
             <>

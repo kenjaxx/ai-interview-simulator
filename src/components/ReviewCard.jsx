@@ -1,5 +1,5 @@
 import { memo } from "react"
-import { entryOverall } from "../lib/scores"
+import { entryOverall, isWeak } from "../lib/scores"
 import { HighlightedAnswer, StarRow } from "./ReviewParts"
 
 const RetryComparison = memo(function RetryComparison({ original, retry, sameMode }) {
@@ -44,17 +44,19 @@ const RetryComparison = memo(function RetryComparison({ original, retry, sameMod
 
 // One answer: the question, the answer with fillers marked, scores, speech metrics, STAR check,
 // feedback, a sample answer, and the retry comparison if there is one.
-function ReviewCard({ entry, index, retry, sessionMode }) {
+//
+// collapsible: the header becomes a button that shows or hides the details. `open` and
+// `onToggle(index)` are controlled by the parent (SessionReview), so "Expand all" and "Jump to
+// weakest" can drive every card. Without `collapsible` the card is always fully shown.
+function ReviewCard({ entry, index, retry, sessionMode, collapsible = false, open = true, onToggle }) {
   const { evaluation, metrics = {}, inputMethod } = entry
   const typed = inputMethod === "text"
+  const overall = entryOverall(entry)
+  const showBody = !collapsible || open
+  const bodyId = `review-body-${index}`
 
-  return (
-    <div className="review-card">
-      <p className="review-index">
-        Answer {index + 1}
-        {entry.isFollowUp && <span className="follow-up-tag">Follow-up</span>}
-      </p>
-      <p className="review-question">{entry.question}</p>
+  const body = (
+    <>
       <HighlightedAnswer text={entry.answer} showNote />
 
       <ul className="chip-row" aria-label="Scores for this answer">
@@ -105,6 +107,55 @@ function ReviewCard({ entry, index, retry, sessionMode }) {
           retry={retry}
           sameMode={!sessionMode || retry.mode === sessionMode}
         />
+      )}
+    </>
+  )
+
+  if (!collapsible) {
+    return (
+      <div className="review-card">
+        <p className="review-index">
+          Answer {index + 1}
+          {entry.isFollowUp && <span className="follow-up-tag">Follow-up</span>}
+        </p>
+        <p className="review-question">{entry.question}</p>
+        {body}
+      </div>
+    )
+  }
+
+  return (
+    <div className="review-card review-card--collapsible" id={`review-card-${index}`}>
+      <button
+        type="button"
+        className="review-toggle"
+        aria-expanded={open}
+        aria-controls={open ? bodyId : undefined}
+        onClick={() => onToggle?.(index)}
+      >
+        <span className="review-toggle-main">
+          <span className="review-index">
+            Answer {index + 1}
+            {entry.isFollowUp && <span className="follow-up-tag">Follow-up</span>}
+            {retry && <span className="follow-up-tag">Retried</span>}
+          </span>
+          <span className="review-toggle-question">{entry.question}</span>
+        </span>
+        <span
+          className={`review-toggle-score ${isWeak(entry) ? "review-toggle-score--weak" : ""}`}
+          aria-label={`Overall score ${overall}${isWeak(entry) ? ", weak answer" : ""}`}
+        >
+          {overall}
+        </span>
+        <span className="review-toggle-chevron" aria-hidden="true">
+          ▾
+        </span>
+      </button>
+
+      {showBody && (
+        <div id={bodyId} className="review-body">
+          {body}
+        </div>
       )}
     </div>
   )

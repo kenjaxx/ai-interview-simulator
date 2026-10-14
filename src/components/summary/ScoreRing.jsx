@@ -1,11 +1,31 @@
+import { useEffect, useState } from "react"
+
 // One circular score gauge. value is 0-100.
 //   color  any CSS color (a var(--...) works)
 //   delta  difference from the user's average, or null to hide the comparison
+//
+// The arc starts empty and fills to the score on the next frames, so the CSS transition on
+// .ring-fill has a starting value to animate from. The number in the middle shows the real score
+// straight away.
 export default function ScoreRing({ value, label, color, size = 88, stroke = 8, delta = null }) {
   const radius = (size - stroke) / 2
   const circumference = 2 * Math.PI * radius
   const pct = Math.max(0, Math.min(100, value))
   const center = size / 2
+
+  const [drawnPct, setDrawnPct] = useState(0)
+
+  useEffect(() => {
+    // Two frames: the first paints the empty ring, the second sets the target so it transitions.
+    let inner = 0
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => setDrawnPct(pct))
+    })
+    return () => {
+      cancelAnimationFrame(outer)
+      cancelAnimationFrame(inner)
+    }
+  }, [pct])
 
   const tone = delta > 0 ? "up" : delta < 0 ? "down" : "same"
   const deltaText = delta > 0 ? `▲ +${delta}` : delta < 0 ? `▼ ${delta}` : "= avg"
@@ -35,7 +55,7 @@ export default function ScoreRing({ value, label, color, size = 88, stroke = 8, 
           strokeWidth={stroke}
           strokeLinecap="round"
           strokeDasharray={circumference}
-          strokeDashoffset={circumference * (1 - pct / 100)}
+          strokeDashoffset={circumference * (1 - drawnPct / 100)}
           transform={`rotate(-90 ${center} ${center})`}
           style={{ stroke: color }}
         />

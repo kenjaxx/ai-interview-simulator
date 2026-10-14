@@ -77,7 +77,8 @@ a:focus-visible {
   font-size: 12.5px;
   color: var(--t-muted);
 }
-.shortcut-hint kbd {
+.shortcut-hint kbd,
+.shortcut-confirm kbd {
   padding: 1px 6px;
   border-radius: 5px;
   border: 1px solid var(--line-strong);
@@ -85,6 +86,18 @@ a:focus-visible {
   color: var(--t-head);
   font: inherit;
   font-size: 12px;
+}
+
+/* Shown after the first Space/Enter press on a long answer. */
+.shortcut-confirm {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--warn);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-line);
 }
 
 .typing-hint {

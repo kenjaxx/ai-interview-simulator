@@ -43,8 +43,14 @@
 
 .history-filters {
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
   margin: 0 0 1.25rem;
+}
+.history-filter-group {
+  display: flex;
+  gap: 8px;
 }
 .filter-btn {
   padding: 6px 14px;
@@ -61,6 +67,33 @@
   background: var(--accent-bg);
 }
 
+/* ---------- role filter ---------- */
+
+.history-role {
+  margin-left: auto;
+  min-width: 0;
+}
+.history-role-select {
+  max-width: 100%;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--input-bg);
+  color: var(--t-main);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.history-role-select:hover,
+.history-role-select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+.history-role-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* ---------- per-category trends ---------- */
 
 .trend-row {
@@ -72,6 +105,13 @@
 @media (max-width: 520px) {
   .trend-row {
     grid-template-columns: 1fr;
+  }
+  .history-role {
+    margin-left: 0;
+    width: 100%;
+  }
+  .history-role-select {
+    width: 100%;
   }
 }
 
@@ -134,11 +174,79 @@
   background: var(--panel-bg);
   border: 1px solid var(--line);
 }
+.chart-plot {
+  position: relative;
+}
 .chart-card svg {
   width: 100%;
   height: auto;
   display: block;
+  touch-action: pan-y; /* vertical scrolling still works; horizontal drag scrubs the tooltip */
+  -webkit-tap-highlight-color: transparent;
 }
+.chart-card svg:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.chart-tooltip {
+  position: absolute;
+  top: 0;
+  z-index: 2;
+  min-width: 150px;
+  max-width: 220px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--input-bg);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow-card);
+  pointer-events: none;
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--t-main);
+}
+.chart-tooltip--start {
+  transform: translateX(-8px);
+}
+.chart-tooltip--center {
+  transform: translateX(-50%);
+}
+.chart-tooltip--end {
+  transform: translateX(calc(-100% + 8px));
+}
+.chart-tooltip-date {
+  font-weight: 650;
+  color: var(--t-head);
+}
+.chart-tooltip-meta {
+  color: var(--t-muted);
+}
+.chart-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+}
+.chart-tooltip-row strong {
+  margin-left: auto;
+  color: var(--t-head);
+}
+.chart-tooltip-row--off {
+  opacity: 0.5;
+}
+.chart-tooltip-overall {
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+.chart-tooltip-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
 .chart-legend {
   list-style: none;
   display: flex;

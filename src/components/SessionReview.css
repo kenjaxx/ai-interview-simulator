@@ -103,3 +103,123 @@
 .score-help strong {
   color: var(--t-head);
 }
+
+/* ---------- summary toolbar: jump, weak-only filter, expand/collapse ---------- */
+
+.review-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin: 0 0 1rem;
+  text-align: left;
+}
+.review-tools .link-btn {
+  font-size: 13.5px;
+  text-align: left;
+}
+.review-tools-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.review-tools .secondary-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+}
+.review-filter-btn {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--t-main);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.review-filter-btn:hover {
+  border-color: var(--accent);
+}
+.review-filter-btn--on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+.review-tools-note {
+  margin: -0.5rem 0 1rem;
+  font-size: 12.5px;
+  line-height: 1.45;
+  text-align: left;
+  color: var(--t-muted);
+}
+
+/* ---------- collapsible review cards ---------- */
+
+/* Leaves room for the sticky header when "Jump to weakest" scrolls a card into view. */
+.review-card--collapsible {
+  scroll-margin-top: 76px;
+}
+
+.review-toggle {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.review-toggle-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.review-toggle .review-index {
+  display: block;
+  margin: 0;
+}
+.review-toggle-question {
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--t-head);
+}
+.review-toggle-score {
+  flex-shrink: 0;
+  min-width: 2.2ch;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--score-chip);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-line);
+}
+.review-toggle-score--weak {
+  color: var(--warn);
+  background: var(--warn-bg);
+  border-color: var(--warn-line);
+}
+.review-toggle-chevron {
+  flex-shrink: 0;
+  line-height: 1.7;
+  color: var(--t-muted);
+  transition: transform 0.15s ease;
+}
+.review-toggle[aria-expanded="true"] .review-toggle-chevron {
+  transform: rotate(180deg);
+}
+
+.review-body {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}

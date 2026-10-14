@@ -92,7 +92,7 @@ export default function InterviewScreen({ interview }) {
             <p className="shortcut-hint">
               Or press <kbd>Space</kbd> or <kbd>Enter</kbd>
             </p>
-            <DoneShortcut onDone={interview.finishAnswer} />
+            <DoneShortcut onDone={interview.finishAnswer} getTranscript={interview.getTranscript} />
           </div>
         )}
 
