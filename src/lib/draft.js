@@ -1,4 +1,4 @@
-import { ROLES, SENIORITIES, MIN_ROLE_CHARS, sanitizeRole } from "./Options"
+import { ROLES, SENIORITIES, MIN_ROLE_CHARS, sanitizeRole } from "./options"
 import { MAX_QAS, MAX_QUESTION_CHARS, MAX_ANSWER_CHARS } from "./limits"
 import { MAX_FOLLOW_UPS } from "./interviewConfig"
 

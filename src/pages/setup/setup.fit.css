@@ -1,0 +1,81 @@
+/* Setup page: the hero shrinks (then disappears) on short screens, and the card fills the rest.
+   Only the middle of the card (.step-body) can scroll, and only if a step is still too tall.
+   The stepper and the Back/Next buttons always stay on screen.
+   Everything is scoped under .page--setup so it wins over base.css whatever the load order. */
+
+.page--setup .hero {
+  flex-shrink: 0;
+  padding: clamp(6px, 2dvh, 28px) 16px clamp(6px, 1.5dvh, 16px);
+}
+.page--setup .hero h1 {
+  font-size: clamp(1.35rem, 4.2dvh, 2.4rem);
+  margin: 0 0 0.4rem;
+}
+.page--setup .hero .eyebrow {
+  margin: 0 0 0.35rem;
+}
+.page--setup .hero-sub {
+  max-width: 52ch;
+  margin: 0 auto;
+  font-size: 0.95rem;
+}
+
+/* Short screens (most phones, small laptops): drop the pitch text, then the whole hero. */
+@media (max-height: 1000px) {
+  .page--setup .hero-sub,
+  .page--setup .hero .eyebrow {
+    display: none;
+  }
+}
+@media (max-height: 760px) {
+  .page--setup .hero {
+    display: none;
+  }
+  .page--setup .setup-note {
+    display: none;
+  }
+}
+
+/* ---------- the card ---------- */
+
+.page--setup .setup-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  box-sizing: border-box;
+  width: min(460px, 100% - 24px);
+  max-width: none;
+  margin: 0 auto calc(12px + env(safe-area-inset-bottom));
+  padding: clamp(14px, 2.4dvh, 28px) clamp(14px, 4vw, 28px);
+  gap: 0.7rem;
+  overflow: hidden;
+}
+.page--setup .setup-card > * {
+  flex-shrink: 0;
+}
+
+/* The one part allowed to scroll. The padding/negative margin keeps focus rings from being clipped. */
+.page--setup .setup-card > .step-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 3px;
+  margin: -3px;
+  gap: 0.85rem;
+}
+
+.page--setup .field {
+  gap: 4px;
+}
+.page--setup .step-nav .primary-btn {
+  margin-top: 0;
+}
+
+@media (max-height: 800px) {
+  .page--setup .mode-toggle {
+    padding: 10px 12px;
+  }
+  .page--setup .mode-toggle-sub {
+    font-size: 12px;
+  }
+}

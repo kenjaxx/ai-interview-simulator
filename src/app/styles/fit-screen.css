@@ -1,0 +1,93 @@
+/* Global "one screen" rules. Imported by App.jsx AFTER base.css and ui-extras.css.
+   The page itself never scrolls. Page-specific layout lives in each page's *.fit.css. */
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden; /* no page scroll, ever */
+  overscroll-behavior: none;
+}
+
+html body #root {
+  height: 100vh; /* fallback */
+  height: 100dvh; /* follows the mobile browser bar */
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Every page root: exactly one screen tall, header on top, the rest is the page. */
+#root .page {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  justify-content: flex-start;
+}
+#root .page > .app-header {
+  flex-shrink: 0;
+}
+
+/* ---------- Header ---------- */
+
+.app-header {
+  padding: 10px 16px;
+  padding-top: calc(10px + env(safe-area-inset-top));
+  flex-shrink: 0;
+}
+.app-header-brand {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+@media (max-width: 420px) {
+  .app-header {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .app-header-user {
+    gap: 6px;
+  }
+  .app-header-signout {
+    padding: 6px 9px;
+    font-size: 12px;
+  }
+}
+@media (max-width: 380px) {
+  /* Just the dot: the title would push the buttons off the edge. */
+  .app-header-title {
+    display: none;
+  }
+}
+
+/* ---------- Touch devices ---------- */
+
+button,
+select,
+input,
+textarea,
+summary {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (pointer: coarse) {
+  #root .primary-btn,
+  #root .secondary-btn,
+  #root .finish-btn {
+    min-height: 44px;
+  }
+  /* 16px stops iOS from zooming the page when a field is focused. */
+  #root .field select,
+  #root .field input[type="text"],
+  #root textarea {
+    font-size: 16px;
+  }
+}
+
+/* Anything that scrolls INSIDE a page gets a slim scrollbar. */
+.step-body,
+.summary-panel,
+.history-panel {
+  scrollbar-width: thin;
+}

@@ -1,4 +1,4 @@
-import { readStored, writeStored } from "./Storage"
+import { readStored, writeStored } from "./storage"
 
 const THEME_KEY = "interview-ai-theme"
 

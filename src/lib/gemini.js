@@ -1,4 +1,4 @@
-import { messageForError } from "./Errormessages"
+import { messageForError } from "./errorMessages"
 import { callBackend } from "./backend"
 import { mockDelay, mockEvaluation } from "./mockEvaluation"
 

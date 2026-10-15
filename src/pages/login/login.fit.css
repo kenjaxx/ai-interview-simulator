@@ -1,0 +1,46 @@
+/* Login page: always exactly one screen. The card tightens on short screens; only on very short ones
+   (a landscape phone) does the stage itself scroll as a last resort.
+   `main.login-stage` is more specific than `.login-stage` in Login.css, so this wins. */
+
+main.login-stage {
+  height: 100vh; /* fallback */
+  height: 100dvh;
+  min-height: 0;
+  padding: 1rem;
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+}
+
+@media (max-height: 700px) {
+  main.login-stage .login-card {
+    padding: 1.1rem;
+  }
+  main.login-stage .login-sub {
+    margin: 0.25rem 0 0.7rem;
+  }
+  main.login-stage .login-or {
+    margin: 0.6rem 0;
+  }
+  main.login-stage .login-foot {
+    margin-top: 0.6rem;
+  }
+  main.login-stage .login-brand {
+    display: none;
+  }
+}
+
+@media (max-height: 560px) {
+  main.login-stage {
+    align-items: flex-start;
+    overflow-y: auto;
+  }
+  main.login-stage .login-sub {
+    display: none;
+  }
+}
+
+/* 16px stops iOS from zooming in when a field is focused. */
+@media (max-width: 520px) {
+  main.login-stage .login-input {
+    font-size: 16px;
+  }
+}

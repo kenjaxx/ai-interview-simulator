@@ -1,4 +1,4 @@
-import { readStored, writeStored } from "./Storage"
+import { readStored, writeStored } from "./storage"
 import { GENERAL_QUESTIONS, SENIORITY_QUESTIONS, ROLE_QUESTIONS } from "./questionBank"
 import { matchesType } from "./questionTypes"
 

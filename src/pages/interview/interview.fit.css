@@ -1,0 +1,96 @@
+/* Interview page: everything scales with the screen height (dvh). On short screens, such as a phone
+   with the keyboard open, the orb and progress bar shrink or hide so the question and the answer
+   box always fit. Scoped under .page--interview. */
+
+.page--interview .interview-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  max-width: 640px;
+  box-sizing: border-box;
+  justify-content: center;
+  gap: clamp(8px, 2dvh, 24px);
+  padding: clamp(8px, 2dvh, 24px) 16px calc(12px + env(safe-area-inset-bottom));
+}
+
+.page--interview .orb {
+  width: clamp(56px, 12dvh, 96px);
+  height: clamp(56px, 12dvh, 96px);
+}
+
+.page--interview .question-text {
+  font-size: clamp(1.05rem, 2.2dvh + 0.55rem, 1.35rem);
+  line-height: 1.4;
+  max-height: 26dvh;
+  overflow-y: auto; /* only a very long custom question ever scrolls */
+}
+
+/* ---------- listening ---------- */
+
+.page--interview .listening-panel {
+  gap: 0.6rem;
+}
+/* Long answers: the box stays small and always shows the newest words.
+   column-reverse makes a scroll box start scrolled to the bottom. */
+.page--interview .live-transcript {
+  display: flex;
+  flex-direction: column-reverse;
+  max-height: 20dvh;
+  overflow-y: auto;
+}
+
+/* ---------- typing + transcript review ---------- */
+
+.page--interview .typing-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: min(46dvh, 360px);
+  gap: 0.5rem;
+}
+.page--interview .typing-panel textarea {
+  flex: 1 1 0;
+  min-height: 72px;
+  height: auto;
+  resize: none;
+}
+
+.page--interview .interview-controls {
+  margin-top: 0;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.page--interview .error-panel {
+  max-height: 30dvh;
+  overflow-y: auto;
+}
+
+/* ---------- short screens ---------- */
+
+@media (max-height: 700px) {
+  .page--interview .progress-label {
+    display: none;
+  }
+  .page--interview .interview-progress {
+    max-width: 280px;
+  }
+  .page--interview .shortcut-hint {
+    display: none;
+  }
+  .page--interview .transcript-review-note {
+    display: none;
+  }
+}
+
+@media (max-height: 520px) {
+  /* Keyboard open on a phone, or a landscape phone. The label ("Listening...") still shows the state. */
+  .page--interview .orb {
+    display: none;
+  }
+  .page--interview .interview-progress {
+    display: none;
+  }
+  .page--interview .transcript-review-sub {
+    display: none;
+  }
+}
