@@ -128,8 +128,10 @@ service cloud.firestore {
     }
 
     function isOwner(uid) {
-      return request.auth != null && request.auth.uid == uid;
-    }
+  return request.auth != null
+    && request.auth.uid == uid
+    && request.auth.token.email_verified == true;
+}
 
     // Each user can only touch their own data.
     match /users/{uid}/sessions/{sessionId} {

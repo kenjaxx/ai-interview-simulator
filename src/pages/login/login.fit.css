@@ -1,40 +1,82 @@
-/* Login page: always exactly one screen. The card tightens on short screens; only on very short ones
-   (a landscape phone) does the stage itself scroll as a last resort.
-   `main.login-stage` is more specific than `.login-stage` in Login.css, so this wins. */
+/* Login page: one screen on desktop. Shorter screens drop the extras. On tablets and phones the art
+   panel becomes a short banner under the form, and the page scrolls inside the stage. */
 
 main.login-stage {
   height: 100vh; /* fallback */
   height: 100dvh;
-  min-height: 0;
   padding: 1rem;
   padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 
-@media (max-height: 700px) {
+/* Medium-short screens: drop the least important pieces. */
+@media (max-height: 780px) {
+  main.login-stage .login-logo {
+    display: none;
+  }
+  main.login-stage .login-steps {
+    display: none;
+  }
   main.login-stage .login-card {
-    padding: 1.1rem;
+    padding: 22px 36px;
   }
-  main.login-stage .login-sub {
-    margin: 0.25rem 0 0.7rem;
+}
+
+/* Short screens (small laptops): tighten more. */
+@media (max-height: 640px) {
+  main.login-stage .login-qcard {
+    display: none;
   }
-  main.login-stage .login-or {
-    margin: 0.6rem 0;
+  main.login-stage .login-art {
+    padding: 22px 26px;
   }
-  main.login-stage .login-foot {
-    margin-top: 0.6rem;
+  main.login-stage .login-strip {
+    height: 60px;
   }
-  main.login-stage .login-brand {
+}
+
+/* Very short screens: only the orb stays. */
+@media (max-height: 560px) {
+  main.login-stage .login-vt {
     display: none;
   }
 }
 
-@media (max-height: 560px) {
-  main.login-stage {
-    align-items: flex-start;
-    overflow-y: auto;
+/* Tablet and phone: stack. The form comes first, the art banner after it. */
+@media (max-width: 860px) {
+  main.login-stage .login-shell {
+    height: auto;
+    flex-direction: column-reverse;
+    max-width: 480px;
+    border-radius: 24px;
   }
-  main.login-stage .login-sub {
+  main.login-stage .login-side {
+    width: 100%;
+  }
+  main.login-stage .login-card {
+    overflow: visible;
+    padding: 24px 20px;
+  }
+  main.login-stage .login-card::before,
+  main.login-stage .login-card::after {
     display: none;
+  }
+  main.login-stage .login-art {
+    padding: 22px;
+  }
+  main.login-stage .login-art-title {
+    font-size: 40px;
+    font-size: 11cqi;
+  }
+  main.login-stage .login-orb-zone,
+  main.login-stage .login-qcard,
+  main.login-stage .login-art-copy {
+    display: none;
+  }
+  main.login-stage .login-theme {
+    top: 10px;
+    right: 10px;
   }
 }
 

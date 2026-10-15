@@ -36,21 +36,27 @@ export async function verifyAppCheck(req) {
   }
 }
 
-// Returns the signed-in user's uid, or throws a 401.
+// Returns the signed-in user's uid, or throws a 401 (bad token) / 403 (email not verified).
 export async function verifyUser(req) {
   const header = req.headers.authorization || ""
   const token = header.startsWith("Bearer ") ? header.slice(7) : null
   if (!token) throw new HttpError(401, "You must be signed in.")
 
+  let payload
   try {
-    const { payload } = await jwtVerify(token, JWKS, {
+    ;({ payload } = await jwtVerify(token, JWKS, {
       issuer: `https://securetoken.google.com/${PROJECT_ID}`,
       audience: PROJECT_ID,
       algorithms: ["RS256"],
-    })
+    }))
     if (!payload.sub) throw new Error("missing sub")
-    return payload.sub // the user's uid
   } catch {
     throw new HttpError(401, "Your session expired. Please sign out and sign in again.")
   }
+
+  // Email + password accounts must confirm their address first. Google accounts always pass.
+  if (payload.firebase?.sign_in_provider === "password" && payload.email_verified !== true) {
+    throw new HttpError(403, "Please verify your email address first.")
+  }
+  return payload.sub // the user's uid
 }

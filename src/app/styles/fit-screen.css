@@ -91,3 +91,10 @@ summary {
 .history-panel {
   scrollbar-width: thin;
 }
+
+/* One shared background for every page: the mesh on <body>. */
+#root,
+#root .page,
+#root .page--history {
+  background: transparent;
+}

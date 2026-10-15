@@ -1,159 +1,125 @@
-/* The login page is always dark, whatever the app theme is: it is a lit room, not a surface.
-   --lc is the light colour as "r, g, b". Cool white is the default; try 255, 222, 170 for warm tungsten
-   or 190, 155, 255 for violet. LightScene.jsx reads this value, so changing it here is enough. */
+/* ---------- theme tokens (scoped to the login page) ----------
+   Light is the default. The dark values apply when the app theme is dark (see ThemeToggle). */
 
 .login-stage {
-  --lc: 232, 224, 255;
-  --mono: "JetBrains Mono", "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --ink: #1c1b25;
+  --ink-soft: #5f5b6b;
+  --pink: #c2269f; /* white text on this is 5:1 */
+  --pink-hover: #a81e89;
+  --accent-text: #a81e89;
+  --focus: #c2269f;
 
-  position: relative;
-  width: 100%;
-  min-height: 100vh;
-  min-height: 100svh;
-  box-sizing: border-box;
-  padding: 2rem 1rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  background: #040407;
-  color: #ececf4;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --shell: #ffffff;
+  --panel: #f7f4fa;
+  --field: #ffffff;
+  --field-line: #e4e0ee;
+  --provider-bg: #ffffff;
+  --shadow: 0 30px 60px -30px rgba(60, 30, 120, 0.5);
+
+  --art: linear-gradient(170deg, #7a58e6 0%, #c58ee8 35%, #dfe3ff 70%, #eef0ff 100%);
+  --art-ink: #1c1b25;
+  --art-ink-soft: #3d3a48;
+  --glass: rgba(255, 255, 255, 0.5);
+  --glass-line: rgba(255, 255, 255, 0.8);
+  --vt-accent: #c2269f;
+  --orb-ring: rgba(255, 255, 255, 0.6);
+
+  --err: #b42318;
+  --err-bg: rgba(220, 38, 38, 0.08);
+  --err-line: rgba(220, 38, 38, 0.28);
+  --ok: #137a45;
+  --ok-bg: rgba(22, 163, 74, 0.08);
+  --ok-line: rgba(22, 163, 74, 0.3);
+
+  --mesh:
+    radial-gradient(900px 600px at 0% 0%, #c4b0f5, transparent 60%),
+    radial-gradient(800px 600px at 100% 15%, #f0b4de, transparent 60%),
+    radial-gradient(900px 700px at 30% 100%, #b9cdf5, transparent 60%), #efeaf8;
 }
 
-.login-stage button:focus-visible {
-  outline: 2px solid rgb(var(--lc));
+:root[data-theme="dark"] .login-stage {
+  --ink: #f0f0f2;
+  --ink-soft: #a9a6bf;
+  --accent-text: #f08ad7;
+  --focus: #f08ad7;
+
+  --shell: #15161d;
+  --panel: #1c1d26;
+  --field: #262734;
+  --field-line: rgba(255, 255, 255, 0.12);
+  --provider-bg: #262734;
+  --shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.9);
+
+  --art: linear-gradient(170deg, #6d4ae0 0%, #a14bd0 30%, #3a2f86 62%, #1a1740 100%);
+  --art-ink: #f0f0f2;
+  --art-ink-soft: #c9c6e0;
+  --glass: rgba(255, 255, 255, 0.1);
+  --glass-line: rgba(255, 255, 255, 0.22);
+  --vt-accent: #f08ad7;
+  --orb-ring: rgba(255, 255, 255, 0.35);
+
+  --err: #ffb3b3;
+  --err-bg: rgba(255, 80, 80, 0.1);
+  --err-line: rgba(255, 80, 80, 0.3);
+  --ok: #8ee6b4;
+  --ok-bg: rgba(52, 199, 119, 0.1);
+  --ok-line: rgba(52, 199, 119, 0.3);
+
+  --mesh:
+    radial-gradient(900px 600px at 0% 0%, rgba(139, 108, 246, 0.35), transparent 60%),
+    radial-gradient(800px 600px at 100% 15%, rgba(224, 86, 184, 0.22), transparent 60%),
+    radial-gradient(900px 700px at 30% 100%, rgba(59, 130, 246, 0.22), transparent 60%), #0d0e13;
+}
+
+/* ---------- stage ---------- */
+
+.login-stage {
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 1.5rem;
+  display: flex; /* the shell uses margin:auto, so it centers without ever clipping its top */
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--mesh);
+}
+
+.login-stage button:focus-visible,
+.login-stage input:focus-visible {
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
-/* ---------- scene ---------- */
-
-.login-scene {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-  contain: layout paint; /* nothing in here can cause layout or paint outside of it */
-}
-
-.login-ambient {
-  position: absolute;
-  right: -120px;
-  top: -160px;
-  width: 520px;
-  height: 520px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(var(--lc), 0.1), rgba(var(--lc), 0) 65%);
-}
-
-.login-star {
-  position: absolute;
-  border-radius: 50%;
-  background: #fff;
-}
-
-/* The beam, light pool, source glow, streak and dust are all drawn on this canvas by LightScene.
-   It renders at half resolution and is stretched to fill the stage. */
-.login-canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.login-vignette {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse at 50% 45%, rgba(0, 0, 0, 0) 35%, rgba(0, 0, 0, 0.65) 100%);
-}
-
-/* Film grain: a tiny SVG noise tile, drawn once and tiled. It is a plain low-opacity layer now.
-   The old "mix-blend-mode: overlay" forced the whole screen to be re-blended every frame. */
-.login-grain {
-  position: absolute;
-  inset: 0;
+/* Theme toggle: always reachable, top right. */
+.login-theme {
+  position: fixed;
+  top: 14px;
+  right: 14px;
   z-index: 5;
-  pointer-events: none;
-  opacity: 0.06;
-  background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.login-theme .theme-toggle {
+  width: 36px;
+  height: 36px;
+  background: var(--glass);
+  border-color: var(--glass-line);
+  backdrop-filter: blur(8px);
 }
 
-.login-brand {
-  position: absolute;
-  left: 18px;
-  top: 16px;
-  z-index: 4;
-  margin: 0;
-  font-family: var(--mono);
-  font-size: 11px;
-  color: #8e8ba5;
-}
+/* ---------- shell ---------- */
 
-/* ---------- card ---------- */
-
-.login-wrap {
-  position: relative;
-  z-index: 3;
+.login-shell {
   width: 100%;
-  max-width: 360px;
-  display: flex;
-  flex-direction: column;
-}
-
-/* --glow, --sx and --sy are written by LightScene.
-   Nothing here repaints when they change: the sheen moves with `transform` and the border highlight
-   fades with `opacity`, so the GPU handles both without redrawing the card.
-   The card also has no backdrop-filter any more (blurring a moving background every frame was the
-   most expensive part), so its background is a little more opaque to make up for it. */
-.login-card {
-  --glow: 0;
-  --sx: 180px;
-  --sy: 0px;
-
-  position: relative;
+  max-width: 1040px;
+  height: min(700px, 100%);
+  margin: auto;
   box-sizing: border-box;
-  padding: 1.6rem;
-  border-radius: 16px;
-  overflow: hidden;
-  text-align: left;
-  background: rgba(22, 21, 32, 0.78);
-  border: 1px solid rgba(var(--lc), 0.1);
-  box-shadow: 0 0 28px rgba(var(--lc), 0.05);
+  padding: 12px;
+  display: flex;
+  gap: 12px;
+  border-radius: 28px;
+  background: var(--shell);
+  box-shadow: var(--shadow);
   animation: login-in 0.5s ease both;
-}
-
-/* The sheen: a fixed-size soft light that slides under the cursor's light. */
-.login-card::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 340px;
-  height: 340px;
-  pointer-events: none;
-  background: radial-gradient(circle, rgba(var(--lc), 0.2), rgba(var(--lc), 0) 70%);
-  transform: translate3d(calc(var(--sx) - 170px), calc(var(--sy) - 170px), 0);
-  opacity: calc(0.25 + var(--glow) * 0.75);
-  will-change: transform, opacity;
-}
-
-/* The lit edge: fades in as the light gets close to the card. */
-.login-card::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  box-shadow:
-    inset 0 0 0 1px rgba(var(--lc), 0.5),
-    inset 0 1px 0 rgba(var(--lc), 0.4),
-    inset 0 0 36px rgba(var(--lc), 0.1);
-  opacity: var(--glow);
-  will-change: opacity;
-}
-.login-card > * {
-  position: relative;
 }
 
 @keyframes login-in {
@@ -167,124 +133,695 @@
   }
 }
 
-.login-card h1 {
-  margin: 0;
-  font-size: 1.6rem;
-  font-weight: 400;
-  line-height: 1.2;
-  letter-spacing: -0.01em;
-  color: #fff;
-}
-.login-sub {
-  margin: 0.35rem 0 1.1rem;
-  font-size: 0.82rem;
-  line-height: 1.5;
-  color: #a9a6bf;
+/* ---------- art panel ---------- */
+
+.login-art {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  box-sizing: border-box;
+  padding: 30px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-radius: 20px;
+  overflow: hidden;
+  container-type: inline-size;
+  background: var(--art);
+  text-align: left;
 }
 
-/* ---------- fields ---------- */
+.login-art-title {
+  margin: 0;
+  font-size: 54px; /* fallback */
+  font-size: 12cqi; /* scales with the panel, so INTERVIEW never overflows */
+  line-height: 0.95;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  text-align: left;
+  color: #fff;
+}
+.login-art-kicker {
+  margin: 0;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  color: #fff;
+}
+
+/* The orb and the voice/typing card live in their own zone BELOW the title. */
+.login-orb-zone {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* ---------- the orb ---------- */
+
+.login-orb-stage {
+  position: relative;
+  flex-shrink: 0;
+  width: 240px;
+  height: 210px;
+}
+
+/* Soft halo behind everything. */
+.login-orb-glow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 230px;
+  height: 230px;
+  margin: -115px 0 0 -115px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 120, 220, 0.55), transparent 65%);
+  animation: login-glow 5s ease-in-out infinite;
+}
+@keyframes login-glow {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+/* A thin orbit ring, tilted so it reads as an ellipse. */
+.login-orb-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 220px;
+  height: 220px;
+  margin: -110px 0 0 -110px;
+  border-radius: 50%;
+  border: 1.5px solid var(--orb-ring);
+  transform: rotateX(74deg) rotateZ(-10deg);
+}
+
+/* Reflection on the "floor" under the orb. */
+.login-orb-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: 2px;
+  width: 130px;
+  height: 18px;
+  margin-left: -65px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(45, 212, 191, 0.75), rgba(124, 58, 237, 0.25) 55%, transparent 75%);
+}
+
+/* The sphere floats; its layers stack inside. */
+.login-orb {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 150px;
+  height: 150px;
+  margin: -78px 0 0 -75px;
+  animation: login-float 6s ease-in-out infinite;
+}
+@keyframes login-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-9px);
+  }
+}
+.login-orb > div {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+.login-orb-body {
+  background: radial-gradient(circle at 30% 25%, #fff 0 4%, #ffd6f5 12%, #f070c8 45%, #9b3fe0 75%, #4a1d9e 100%);
+  box-shadow:
+    inset -14px -18px 30px rgba(50, 15, 130, 0.6),
+    inset 10px 12px 24px rgba(255, 255, 255, 0.5),
+    0 40px 56px -16px rgba(124, 58, 237, 0.6);
+}
+/* A teal and blue shimmer that slowly travels around the surface. */
+.login-orb-sheen {
+  background: conic-gradient(
+    rgba(45, 212, 191, 0),
+    rgba(45, 212, 191, 0.55),
+    rgba(255, 255, 255, 0) 35%,
+    rgba(96, 165, 250, 0.5) 62%,
+    rgba(45, 212, 191, 0)
+  );
+  mix-blend-mode: screen;
+  opacity: 0.7;
+  animation: login-spin 14s linear infinite;
+}
+@keyframes login-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* The bright reflection near the top left. */
+.login-orb-hi {
+  inset: auto !important;
+  left: 24px;
+  top: 17px;
+  width: 56px;
+  height: 30px;
+  border-radius: 50%;
+  background: linear-gradient(rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0));
+  transform: rotate(-30deg);
+}
+/* A faint lit edge at the bottom right. */
+.login-orb-rim {
+  inset: auto !important;
+  right: 14px;
+  bottom: 12px;
+  width: 66px;
+  height: 66px;
+  border-radius: 50%;
+  border-right: 3px solid rgba(255, 255, 255, 0.45);
+  transform: rotate(-8deg);
+}
+
+/* Sparkles. */
+.login-spark {
+  position: absolute;
+  display: block;
+  background: #fff;
+  clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%);
+  opacity: 0.9;
+  animation: login-twinkle 3s ease-in-out infinite;
+}
+.login-spark--1 {
+  left: 24px;
+  top: 30px;
+  width: 14px;
+  height: 14px;
+}
+.login-spark--2 {
+  right: 18px;
+  top: 52px;
+  width: 10px;
+  height: 10px;
+  animation-delay: 0.8s;
+}
+.login-spark--3 {
+  right: 28px;
+  bottom: 40px;
+  width: 14px;
+  height: 14px;
+  animation-delay: 1.6s;
+}
+.login-spark--4 {
+  left: 36px;
+  bottom: 48px;
+  width: 9px;
+  height: 9px;
+  animation-delay: 2.2s;
+}
+@keyframes login-twinkle {
+  0%,
+  100% {
+    opacity: 0.15;
+    transform: scale(0.5);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ---------- voice / typing card ---------- */
+
+.login-vt {
+  position: relative;
+  flex-shrink: 0;
+  width: 260px;
+  height: 64px;
+  border-radius: 18px;
+  background: var(--glass);
+  border: 1px solid var(--glass-line);
+  backdrop-filter: blur(6px);
+  color: var(--art-ink);
+}
+.login-vt-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+}
+/* The still (reduced-motion) state is "speaking"; the animation crossfades the two. */
+.login-vt-layer--voice {
+  opacity: 1;
+  animation: login-vt-a 8s ease-in-out infinite;
+}
+.login-vt-layer--type {
+  opacity: 0;
+  animation: login-vt-b 8s ease-in-out infinite;
+}
+@keyframes login-vt-a {
+  0%,
+  40% {
+    opacity: 1;
+  }
+  50%,
+  90% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes login-vt-b {
+  0%,
+  40% {
+    opacity: 0;
+  }
+  50%,
+  90% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.login-vt-icon {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--pink);
+}
+.login-vt-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.login-vt-body b {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* Sound bars. */
+.login-vt-eq {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+}
+.login-vt-eq i {
+  display: block;
+  width: 4px;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--vt-accent);
+  animation: login-eq 1s ease-in-out infinite;
+}
+.login-vt-eq i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.login-vt-eq i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+.login-vt-eq i:nth-child(4) {
+  animation-delay: 0.45s;
+}
+.login-vt-eq i:nth-child(5) {
+  animation-delay: 0.6s;
+}
+.login-vt-eq i:nth-child(6) {
+  animation-delay: 0.75s;
+}
+.login-vt-eq i:nth-child(7) {
+  animation-delay: 0.9s;
+}
+@keyframes login-eq {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+/* Typed text and caret. */
+.login-vt-typed {
+  display: flex;
+  align-items: flex-end;
+  font-size: 13px;
+}
+.login-vt-typed > span {
+  display: inline-block;
+  overflow: hidden;
+  white-space: nowrap;
+  width: 9.6em;
+  animation: login-type 8s steps(19) infinite;
+}
+@keyframes login-type {
+  0%,
+  50% {
+    width: 0;
+  }
+  85%,
+  100% {
+    width: 9.6em;
+  }
+}
+.login-vt-caret {
+  display: block;
+  width: 2px;
+  height: 14px;
+  margin-left: 2px;
+  background: var(--vt-accent);
+  animation: login-blink 0.8s steps(1) infinite;
+}
+@keyframes login-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* ---------- "interviewer asks" card ---------- */
+
+.login-qcard {
+  flex-shrink: 0;
+  box-sizing: border-box;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: var(--glass);
+  border: 1px solid var(--glass-line);
+  backdrop-filter: blur(6px);
+  color: var(--art-ink);
+}
+.login-qlabel {
+  margin: 0 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--art-ink-soft);
+}
+.login-qdot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pink);
+}
+.login-qtext {
+  margin: 0;
+  min-height: 2.9em; /* two lines, so the card never jumps between questions */
+  font-size: 15.5px;
+  font-weight: 650;
+  line-height: 1.45;
+  animation: login-swap 0.45s ease both;
+}
+@keyframes login-swap {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.login-art-copy {
+  flex-shrink: 0;
+}
+.login-art-heading {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.15;
+  font-weight: 800;
+  color: var(--art-ink);
+}
+.login-steps {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+.login-steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--art-ink-soft);
+}
+.login-steps span {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--pink);
+}
+
+/* ---------- form panel ---------- */
+
+.login-side {
+  width: 468px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.login-card {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 28px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-radius: 20px;
+  background: var(--panel);
+  text-align: left;
+  scrollbar-width: thin;
+}
+/* Centers the form when there is room, and collapses to nothing when there isn't (so the top
+   is never cut off and the card just scrolls). */
+.login-card::before,
+.login-card::after {
+  content: "";
+  flex: 1 0 0;
+}
+/* Nothing inside the card is allowed to shrink, so buttons never get squashed. */
+.login-card > * {
+  flex-shrink: 0;
+}
+
+.login-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--field);
+  position: relative;
+}
+.login-logo::after {
+  content: "";
+  position: absolute;
+  inset: 12px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #c084fc, #7c3aed);
+}
+
+.login-card h1 {
+  margin: 4px 0 0;
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  text-align: left;
+  color: var(--ink);
+}
+.login-sub {
+  margin: 0 0 6px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+.login-sub strong {
+  color: var(--ink);
+  word-break: break-all;
+}
+
+/* ---------- fields with a floating label ---------- */
 
 .login-field {
   position: relative;
-  margin: 0 0 0.5rem;
 }
 .login-input {
   width: 100%;
-  height: 38px;
+  height: 52px;
   box-sizing: border-box;
-  padding: 0 0.75rem;
-  border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(0, 0, 0, 0.28);
-  color: #f1effa;
-  font-family: var(--mono);
-  font-size: 0.78rem;
-  outline: none;
+  padding: 18px 14px 4px;
+  border: 1px solid var(--field-line);
+  border-radius: 12px;
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14.5px;
   transition:
     border-color 0.15s ease,
     box-shadow 0.15s ease;
 }
-.login-input::placeholder {
-  color: #8e8ba5;
-}
 .login-input:hover {
-  border-color: rgba(255, 255, 255, 0.32);
+  border-color: var(--ink-soft);
 }
 .login-input:focus-visible {
-  border-color: rgb(var(--lc));
-  box-shadow: 0 0 0 3px rgba(var(--lc), 0.15);
+  border-color: var(--focus);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 22%, transparent);
 }
 .login-input:disabled {
   opacity: 0.6;
 }
 .login-input--password {
-  padding-right: 3.8rem;
+  padding-right: 4.2rem;
 }
-/* Keep the browser's autofill from painting a pale yellow box on the dark card. */
+
+/* Resting: the label sits in the middle of the box like a placeholder. */
+.login-field label {
+  position: absolute;
+  left: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  max-width: calc(100% - 90px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14.5px;
+  color: var(--ink-soft);
+  pointer-events: none; /* clicks go through to the input */
+  transition:
+    top 0.16s ease,
+    transform 0.16s ease,
+    font-size 0.16s ease,
+    color 0.16s ease;
+}
+/* Active: focused, filled in, or autofilled. The label slides up and shrinks. */
+.login-input:focus + label,
+.login-input:not(:placeholder-shown) + label,
+.login-input:-webkit-autofill + label {
+  top: 9px;
+  transform: none;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.login-input:focus + label {
+  color: var(--accent-text);
+}
+/* Keep autofill from painting a yellow box. */
 .login-input:-webkit-autofill {
-  -webkit-text-fill-color: #f1effa;
-  caret-color: #fff;
-  box-shadow: 0 0 0 100px #15141e inset;
+  -webkit-text-fill-color: var(--ink);
+  caret-color: var(--ink);
+  box-shadow: 0 0 0 100px var(--field) inset;
 }
 
 .login-show {
   position: absolute;
-  right: 0.35rem;
+  right: 6px;
   top: 50%;
   transform: translateY(-50%);
-  padding: 0.35rem 0.5rem;
+  padding: 6px 10px;
   border: none;
-  border-radius: 4px;
+  border-radius: 8px;
   background: none;
-  color: #e4dcff;
-  font-family: var(--mono);
-  font-size: 0.72rem;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
   cursor: pointer;
 }
 .login-show:hover {
-  color: #fff;
+  color: var(--ink);
 }
 
 .login-link {
   padding: 0;
   border: none;
   background: none;
-  color: #b4b1c8;
-  font-family: var(--mono);
-  font-size: 0.72rem;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12.5px;
   cursor: pointer;
 }
 .login-link:hover:not(:disabled) {
-  color: #fff;
+  color: var(--ink);
   text-decoration: underline;
 }
+.login-link:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 .login-link--strong {
-  color: #e4dcff;
+  color: var(--ink);
+  font-weight: 700;
 }
 .login-forgot {
-  display: block;
-  margin: 0.15rem 0 0.95rem;
+  align-self: flex-end;
+}
+
+.login-verify-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 /* ---------- buttons ---------- */
 
 .login-submit {
   width: 100%;
-  height: 38px;
+  height: 46px;
+  min-height: 46px;
+  margin-top: 4px;
   border: none;
-  border-radius: 4px;
-  background: #ece8ff;
-  color: #15111f;
-  font-family: var(--mono);
-  font-size: 0.78rem;
-  font-weight: 500;
+  border-radius: 999px;
+  background: var(--pink);
+  color: #fff;
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 700;
   cursor: pointer;
   transition:
     background 0.15s ease,
     transform 0.1s ease;
 }
 .login-submit:hover:not(:disabled) {
-  background: #fff;
+  background: var(--pink-hover);
 }
 .login-submit:active:not(:disabled) {
   transform: translateY(1px);
@@ -293,56 +830,36 @@
   opacity: 0.65;
   cursor: wait;
 }
-/* The reset screen has no "Forgot password" link, so the submit button needs its own top gap. */
-.login-field + .login-submit {
-  margin-top: 0.5rem;
-}
 
 .login-or {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin: 0.95rem 0;
-  font-family: var(--mono);
-  font-size: 0.72rem;
-  color: #8e8ba5;
-}
-.login-or::before,
-.login-or::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.14);
+  text-align: center;
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--ink-soft);
 }
 
-.login-providers {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
-}
 .login-provider {
-  height: 38px;
+  width: 100%;
+  height: 44px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.45rem;
-  border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.07);
-  color: #e9e7f6;
-  font-family: var(--mono);
-  font-size: 0.75rem;
+  gap: 8px;
+  border: 1px solid var(--field-line);
+  border-radius: 999px;
+  background: var(--provider-bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
+  transition: box-shadow 0.15s ease;
 }
 .login-provider:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 14px -6px rgba(60, 30, 120, 0.5);
 }
-.login-provider:disabled,
-.login-link:disabled {
+.login-provider:disabled {
   opacity: 0.55;
   cursor: wait;
 }
@@ -351,27 +868,71 @@
 
 .login-error,
 .login-notice {
-  margin: 0 0 0.8rem;
-  padding: 0.55rem 0.7rem;
-  border-radius: 6px;
-  font-size: 0.78rem;
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: 10px;
+  font-size: 13px;
   line-height: 1.45;
 }
 .login-error {
-  color: #ffb8b8;
-  background: rgba(255, 80, 80, 0.08);
-  border: 1px solid rgba(255, 100, 100, 0.28);
+  color: var(--err);
+  background: var(--err-bg);
+  border: 1px solid var(--err-line);
 }
 .login-notice {
-  color: #8ee6b4;
-  background: rgba(52, 199, 119, 0.08);
-  border: 1px solid rgba(52, 199, 119, 0.3);
+  color: var(--ok);
+  background: var(--ok-bg);
+  border: 1px solid var(--ok-line);
 }
 
 .login-foot {
-  margin: 0.95rem 0 0;
+  margin: 4px 0 0;
   text-align: center;
-  font-family: var(--mono);
-  font-size: 0.72rem;
-  color: #8e8ba5;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+/* ---------- interviewer strip ---------- */
+
+.login-strip {
+  height: 76px;
+  box-sizing: border-box;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-radius: 20px;
+  background: var(--panel);
+  text-align: left;
+}
+.login-faces {
+  display: flex;
+}
+.login-face {
+  width: 38px;
+  height: 38px;
+  margin-left: -10px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid var(--shell);
+  background: var(--shell);
+}
+.login-face:first-child {
+  margin-left: 0;
+}
+.login-face svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.login-strip-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.login-strip-sub {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-soft);
 }

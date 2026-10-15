@@ -3,10 +3,10 @@ import {
   onAuthStateChanged,
   signInWithPopup,
   signOut,
-  GithubAuthProvider,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
+  sendEmailVerification,
   updateProfile,
 } from "firebase/auth"
 import { auth, googleProvider } from "../../lib/firebase"
@@ -15,29 +15,34 @@ import { messageForAuthError } from "../../lib/authErrors"
 
 const AuthContext = createContext(null)
 
-// Created once. "user:email" asks GitHub for the primary email so Header can show something readable.
-const githubProvider = new GithubAuthProvider()
-githubProvider.addScope("user:email")
+// Email + password accounts must confirm their address. Google accounts arrive already verified.
+const needsVerification = (u) =>
+  !!u && !u.emailVerified && u.providerData.some((p) => p.providerId === "password")
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null)
+  const [firebaseUser, setFirebaseUser] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [authError, setAuthError] = useState(null)
-  // Bumped after updateProfile(): Firebase mutates the same user object, so React needs a nudge to
-  // re-render consumers (like Header) with the new display name.
-  const [, setProfileTick] = useState(0)
+  // Firebase mutates the same user object (updateProfile, reload), so React needs a nudge.
+  const [, setTick] = useState(0)
+  const bump = () => setTick((n) => n + 1)
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser)
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setFirebaseUser(u)
       setAuthLoading(false)
     })
     return unsubscribe
   }, [])
 
+  const pending = needsVerification(firebaseUser)
+  // The rest of the app only ever sees a verified user.
+  const user = pending ? null : firebaseUser
+  const pendingUser = pending ? firebaseUser : null
+
   const clearAuthError = useCallback(() => setAuthError(null), [])
 
-  // Runs one auth action. Resolves to true on success, false on failure (the message is in authError).
+  // Runs one auth action. Resolves to true on success, false on failure (message is in authError).
   const run = useCallback(async (action) => {
     setAuthError(null)
     try {
@@ -53,8 +58,6 @@ export function AuthProvider({ children }) {
 
   const signInWithGoogle = useCallback(() => run(() => signInWithPopup(auth, googleProvider)), [run])
 
-  const signInWithGithub = useCallback(() => run(() => signInWithPopup(auth, githubProvider)), [run])
-
   const signInWithEmail = useCallback(
     (email, password) => run(() => signInWithEmailAndPassword(auth, email, password)),
     [run]
@@ -67,21 +70,53 @@ export function AuthProvider({ children }) {
         if (name) {
           try {
             await updateProfile(credential.user, { displayName: name })
-            setProfileTick((n) => n + 1)
           } catch (err) {
-            // The account exists already; a missing display name isn't worth failing the sign-up.
             console.warn("Couldn't save the display name:", err)
           }
         }
+        // The account exists now. If this fails, the verify screen has a Resend button.
+        try {
+          await sendEmailVerification(credential.user)
+        } catch (err) {
+          console.warn("Couldn't send the verification email:", err)
+        }
+        bump()
       }),
     [run]
   )
 
   const sendPasswordReset = useCallback((email) => run(() => sendPasswordResetEmail(auth, email)), [run])
 
+  // Verify screen: send the link again.
+  const resendVerification = useCallback(
+    () =>
+      run(async () => {
+        if (!auth.currentUser) throw new Error("no user")
+        await sendEmailVerification(auth.currentUser)
+      }),
+    [run]
+  )
+
+  // Verify screen: "I've verified". Reloads the user and refreshes the ID token, so the server and
+  // Firestore rules see email_verified = true. Resolves to true once the address is confirmed.
+  const checkVerification = useCallback(async () => {
+    const u = auth.currentUser
+    if (!u) return false
+    setAuthError(null)
+    try {
+      await u.reload()
+      if (u.emailVerified) await u.getIdToken(true)
+    } catch (err) {
+      console.error("Couldn't refresh the user:", err?.code || err)
+      setAuthError(messageForAuthError(err))
+      return false
+    }
+    bump()
+    return u.emailVerified
+  }, [])
+
   const signOutUser = useCallback(async () => {
-    // Cached history belongs to the signed-in user, so drop it on the way out.
-    clearHistoryCache()
+    clearHistoryCache() // cached history belongs to the signed-in user
     await signOut(auth)
   }, [])
 
@@ -89,14 +124,16 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider
       value={{
         user,
+        pendingUser,
         authLoading,
         authError,
         clearAuthError,
         signInWithGoogle,
-        signInWithGithub,
         signInWithEmail,
         signUpWithEmail,
         sendPasswordReset,
+        resendVerification,
+        checkVerification,
         signOutUser,
       }}
     >

@@ -1,17 +1,12 @@
 .page {
-  min-height: 100vh; /* fallback for browsers without svh */
-  min-height: 100svh; /* small viewport height: doesn't jump when the mobile address bar hides */
+  min-height: 100vh;
+  min-height: 100svh;
   width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Roboto,
-    sans-serif;
-  background: radial-gradient(1200px 500px at 50% -10%, var(--app-glow), transparent 60%), var(--app-bg);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: transparent; /* the body's mesh shows through, so every page matches */
   color: var(--t-main);
 }
 
@@ -22,7 +17,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--app-bg);
+  background: transparent;
 }
 
 .page-loading-spinner {
