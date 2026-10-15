@@ -1,0 +1,463 @@
+/* ---------- interviewer tile ----------
+   The tile stays deep purple in both themes, like a video tile. */
+
+.tile {
+  position: relative;
+  grid-area: tile;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: 24px;
+  overflow: hidden;
+  background: linear-gradient(160deg, #3a2f86, #1a1740);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
+  text-align: left;
+}
+
+.tile-top {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 16px 0;
+}
+.tile-name,
+.tile-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Sound bars next to the status; they only move while the interviewer is active. */
+.tile-eq {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 12px;
+}
+.tile-eq i {
+  display: block;
+  width: 3px;
+  height: 100%;
+  border-radius: 2px;
+  background: #f08ad7;
+  transform: scaleY(0.3);
+}
+.tile--speaking .tile-eq i,
+.tile--listening .tile-eq i,
+.tile--thinking .tile-eq i {
+  animation: tile-eq 1s ease-in-out infinite;
+}
+.tile-eq i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.tile-eq i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+.tile-eq i:nth-child(4) {
+  animation-delay: 0.45s;
+}
+@keyframes tile-eq {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.tile-progress {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  gap: 6px;
+  padding: 12px 16px 0;
+}
+.tile-seg {
+  flex: 1;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  transition: background 0.3s ease;
+}
+.tile-seg--done {
+  background: #c084fc;
+}
+.tile-seg--current {
+  background: #c084fc;
+  opacity: 0.55;
+}
+
+.tile-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tile-aura {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(80%, 420px);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(192, 132, 252, 0.5), transparent 65%);
+  opacity: 0.6;
+  transition: opacity 0.4s ease;
+}
+.tile--speaking .tile-aura {
+  opacity: 1;
+  animation: tile-aura 2.4s ease-in-out infinite;
+}
+@keyframes tile-aura {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.08);
+  }
+}
+
+/* Avatar.css positions the face with inset: 8% (for the old ring). Here it fills its own box. */
+.tile-avatar {
+  position: relative;
+  width: clamp(120px, min(46%, 34dvh), 220px);
+  aspect-ratio: 1;
+}
+.tile-avatar .avatar {
+  inset: 0;
+}
+
+/* The question, as subtitles. */
+.tile-caption {
+  position: relative;
+  z-index: 2;
+  margin: 0 16px 16px;
+  padding: 14px 20px;
+  max-height: 32%;
+  overflow-y: auto;
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: clamp(1rem, 1.2dvh + 0.7rem, 1.3rem);
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+}
+
+/* ---------- you tile ---------- */
+
+.you {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 24px;
+  background: var(--panel-bg);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(10px);
+  text-align: left;
+}
+.you-avatar {
+  position: relative;
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #aa3bff, #7c3aed);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+}
+.you-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.you-mic {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #6b6b78;
+  color: #fff;
+  border: 2px solid var(--app-bg);
+}
+.you--live .you-mic {
+  background: #c2269f;
+}
+.you-meta {
+  flex: 1;
+  min-width: 0;
+}
+.you-name {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--t-head);
+}
+.you-state {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--t-muted);
+}
+.you-bars {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 28px;
+}
+.you-bars i {
+  display: block;
+  width: 4px;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--ok);
+  transform: scaleY(0.15);
+  transition: transform 0.08s linear;
+}
+
+/* ---------- answer panel ---------- */
+
+.answer-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 20px;
+  border-radius: 24px;
+  background: var(--panel-bg);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(10px);
+  text-align: left;
+  overflow: hidden;
+}
+.answer-head {
+  margin: 0;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--t-muted);
+}
+.answer-head:focus {
+  outline: none;
+}
+.answer-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.answer-body > * {
+  flex-shrink: 0;
+}
+.answer-label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--info);
+}
+.answer-hint {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--t-muted);
+}
+.answer-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+.answer-wait {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  text-align: center;
+}
+
+/* The live transcript grows downwards and always shows the newest words:
+   column-reverse makes a scroll box start scrolled to the bottom. */
+.answer-live {
+  flex: 1 1 auto;
+  min-height: 72px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column-reverse;
+}
+.answer-live .live-transcript {
+  padding: 0;
+  text-align: left;
+  font-size: 15px;
+  font-style: normal;
+  line-height: 1.55;
+  color: var(--t-soft);
+}
+
+/* The existing typing and review panels, fitted to this panel. */
+.answer-panel .typing-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-width: none;
+  align-items: stretch;
+}
+.answer-panel .typing-panel textarea {
+  flex: 1 1 0;
+  min-height: 90px;
+  height: auto;
+  resize: none;
+}
+.answer-panel .transcript-review-head,
+.answer-panel .transcript-review-note {
+  text-align: left;
+}
+.answer-panel .transcript-review-actions {
+  justify-content: flex-start;
+}
+.answer-panel .error-panel {
+  max-width: none;
+  align-items: flex-start;
+  text-align: left;
+}
+.answer-panel .error-actions {
+  justify-content: flex-start;
+}
+
+/* ---------- control dock ---------- */
+
+.dock {
+  grid-area: dock;
+  justify-self: center;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: var(--panel-bg);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow-card);
+}
+
+.dock-mic {
+  flex-shrink: 0;
+  width: 46px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #6b6b78;
+  color: #fff;
+}
+.dock-mic--btn {
+  background: #c2269f;
+  cursor: pointer;
+}
+.dock-mic--btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.dock-mic--live {
+  background: #c2269f;
+  animation: dock-pulse 2s ease-out infinite;
+}
+@keyframes dock-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(194, 38, 159, 0.55);
+  }
+  100% {
+    box-shadow: 0 0 0 14px rgba(194, 38, 159, 0);
+  }
+}
+
+.dock-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--t-main);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+.dock-btn:hover:not(:disabled) {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+.dock-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.dock-btn--go {
+  padding: 0 22px;
+  background: linear-gradient(135deg, #34c777, #1fa562);
+  color: #06180d;
+  font-weight: 700;
+}
+.dock-btn--go:hover:not(:disabled) {
+  background: linear-gradient(135deg, #3fd885, #23b56c);
+  color: #06180d;
+}
+.dock-btn--end {
+  background: #d92d20;
+  color: #fff;
+}
+.dock-btn--end:hover:not(:disabled) {
+  background: #b42318;
+  color: #fff;
+}
