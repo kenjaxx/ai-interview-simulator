@@ -37,9 +37,10 @@ const HEDGE =
 const DONT_KNOW = /\bi\s*(do\s*not|don'?t)\s*know\b|\bidk\b|\bno idea\b/
 
 // Does this token look like a real word? Catches keyboard mashing, vowel-less strings, repeated chunks.
+// Does this token look like a real word? Catches keyboard mashing, vowel-less strings, repeated chunks.
 function looksLikeWord(w) {
   if (COMMON.has(w)) return true
-  if (/[^\x00-\x7f]/.test(w)) return true // other scripts: don't judge
+  if (/[^\p{ASCII}]/u.test(w)) return true // other scripts: don't judge
   if (w.length < 3 || w.length > 24) return false
   if (!/[aeiouy]/.test(w)) return false
   if (/[^aeiouy']{6,}/.test(w)) return false

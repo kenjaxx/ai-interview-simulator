@@ -14,13 +14,13 @@ export function onRadioGroupKeyDown(event) {
   const index = radios.indexOf(target)
   if (index === -1) return
 
-  let target_i = index
-  if (key === "Home") target_i = 0
-  else if (key === "End") target_i = radios.length - 1
-  else if (next) target_i = (index + 1) % radios.length
-  else target_i = (index - 1 + radios.length) % radios.length
+  let targetIndex
+  if (key === "Home") targetIndex = 0
+  else if (key === "End") targetIndex = radios.length - 1
+  else if (next) targetIndex = (index + 1) % radios.length
+  else targetIndex = (index - 1 + radios.length) % radios.length
 
   event.preventDefault()
-  radios[target_i].focus()
-  radios[target_i].click()
+  radios[targetIndex].focus()
+  radios[targetIndex].click()
 }
