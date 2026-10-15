@@ -1,6 +1,6 @@
 import { messageForError } from "./errorMessages"
 import { callBackend } from "./backend"
-import { mockDelay, mockEvaluation } from "./mockEvaluation"
+import { mockDelay, mockEvaluation, mockSummary } from "./mockEvaluation"
 
 export { GeminiApiError } from "./apiError"
 
@@ -19,10 +19,11 @@ const MOCK_MODE = import.meta.env.VITE_MOCK_AI === "true"
 export async function evaluateSession({ role, seniority, qas, mock = false }) {
   if (MOCK_MODE || mock) {
     await mockDelay()
+    // The question is passed along so the local scorer can check the answer is on topic.
+    const evaluations = qas.map((qa) => mockEvaluation(qa.answer, qa.metrics, qa.inputMethod, qa.question))
     return {
-      evaluations: qas.map((qa) => mockEvaluation(qa.answer, qa.metrics, qa.inputMethod)),
-      overallSummary:
-        "Solid overall performance — focus on trimming filler words and keeping a steady pace. (Practice Mode: locally scored, not real AI feedback.)",
+      evaluations,
+      overallSummary: mockSummary(evaluations),
       usage: null,
     }
   }

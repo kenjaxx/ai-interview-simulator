@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect } from "react"
+import { lazy, Suspense, useCallback, useEffect, useRef } from "react"
 import Header from "../common/components/Header"
 import Login from "../pages/login/Login"
 import ChunkErrorBoundary from "../common/components/ChunkErrorBoundary"
@@ -9,7 +9,6 @@ import { useInterview } from "./engine/useInterview"
 import "./styles/base.css"
 import "./styles/ui-extras.css"
 import "./styles/fit-screen.css"
-
 
 // Setup is the first screen after login, so it stays in the main bundle. Everything else is split
 // into its own chunk. HistoryScreen pulls in the chart, trend and PDF-button code with it.
@@ -57,6 +56,9 @@ export default function App() {
   const { user, authLoading } = useAuth()
   const { screen, setScreen, setup, interview, summary } = useInterview({ user, authLoading })
 
+  // Where "Back" in History should go: the screen History was opened from.
+  const returnScreenRef = useRef("setup")
+
   // While the user sits on the setup screen, quietly fetch the interview and summary chunks, so
   // pressing "Start interview" doesn't wait on the network. History is only fetched when opened.
   useEffect(() => {
@@ -75,9 +77,14 @@ export default function App() {
     return () => clearTimeout(id)
   }, [user, screen])
 
-  // Stable identities, so memoized children (Header) don't re-render needlessly.
-  const openHistory = useCallback(() => setScreen("history"), [setScreen])
-  const closeHistory = useCallback(() => setScreen("setup"), [setScreen])
+  // Opening History from the summary remembers the summary, so Back returns there instead of
+  // dropping the user on the setup screen. The summary data lives in useInterview, which stays
+  // mounted, so nothing is lost while History is open.
+  const openHistory = useCallback(() => {
+    returnScreenRef.current = screen === "summary" ? "summary" : "setup"
+    setScreen("history")
+  }, [screen, setScreen])
+  const closeHistory = useCallback(() => setScreen(returnScreenRef.current), [setScreen])
 
   if (authLoading) return <ScreenFallback />
 

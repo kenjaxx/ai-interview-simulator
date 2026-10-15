@@ -4,17 +4,20 @@ import SessionReview from "../../common/review/SessionReview"
 import ExportPdfButton from "../../common/review/ExportPdfButton"
 import RetryCard from "./components/RetryCard"
 import ScoreSummary from "./components/ScoreSummary"
+import StrengthsFocus from "./components/StrengthsFocus"
+import FillerHighlights from "./components/FillerHighlights"
 import { useHistoryBaseline } from "./hooks/useHistoryBaseline"
 import { useSaveToasts } from "./hooks/useSaveToasts"
 import { resetPhrase } from "../../lib/time"
 import "./summary.fit.css"
+import "./summary-extras.css"
 
 const TABS = ["overview", "answers"]
 
 // summary: the `summary` object from useInterview().
-// One screen, no page scroll: "Overview" (scores, retry) and "Answers" (the review cards) are two tabs,
-// and the action buttons are pinned at the bottom. Both panels stay mounted (just hidden), so the
-// open/closed state of the review cards survives switching tabs.
+// One screen, no page scroll: "Overview" (scores, strengths, fillers, retry) and "Answers" (the review
+// cards) are two tabs, and the action buttons are pinned at the bottom. Both panels stay mounted (just
+// hidden), so the open/closed state of the review cards survives switching tabs.
 export default function SummaryScreen({ summary, onHistory }) {
   const [tab, setTab] = useState("overview")
 
@@ -79,6 +82,10 @@ export default function SummaryScreen({ summary, onHistory }) {
           {summary.overallSummary && <p className="summary-lede">{summary.overallSummary}</p>}
 
           <ScoreSummary session={summary.session} baseline={baseline} sessionMode={summary.sessionMode} />
+
+          <StrengthsFocus session={summary.session} />
+
+          <FillerHighlights session={summary.session} />
 
           {summary.sessionMode === "full" && summary.usage && (
             <p className="usage-note" role="status">
