@@ -18,8 +18,8 @@ export const APP_CHECK_ENFORCE = process.env.APP_CHECK_ENFORCE === "true"
 // The fallback is tried once if the primary fails transiently (overloaded, rate-limited, timed out,
 // unreachable). Quotas are tracked per model, so a different fallback can still work when the
 // primary is exhausted.
-export const MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash"
-export const FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || "gemini-2.5-flash"
+export const MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash"
+export const FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || "gemini-3.8-flash"
 export const geminiUrl = (model) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
 
