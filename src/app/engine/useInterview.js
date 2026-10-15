@@ -3,6 +3,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from "react"
 import { ROLES } from "../../lib/options"
 import { findWeakestIndex } from "../../lib/scores"
 import { DEFAULT_QUESTION_COUNT } from "../../lib/interviewConfig"
+import { SPEECH_LANG } from "../../lib/speechOptions"
 
 import { useSetupForm } from "../../pages/setup/hooks/useSetupForm"
 import { useQuota } from "../../pages/setup/hooks/useQuota"
@@ -19,7 +20,7 @@ import { saveDraft, loadDraft, clearDraft } from "../../lib/draft"
 // Runs an interview: the question loop. Everything else is delegated:
 //   useSetupForm        what the user picked on the setup screen
 //   useQuota            daily AI allowance
-//   useSpeechIO         speech recognition, text-to-speech, mic
+//   useSpeechIO         speech recognition, text-to-speech (in the interviewer's voice), mic
 //   useSessionSave      saving the finished session
 //   useFollowUps        AI follow-up questions
 //   useRetryFlow        re-answering the weakest answer
@@ -97,11 +98,8 @@ export function useInterview({ user, authLoading }) {
     resetQuota,
   } = useQuota({ uid, screen, aiMode: form.aiMode })
 
-  const speech = useSpeechIO({
-    speechLang: form.speechLang,
-    ttsVoiceURI: form.ttsVoiceURI,
-    ttsRate: form.ttsRate,
-  })
+  // The chosen interviewer decides which voice reads the questions.
+  const speech = useSpeechIO({ interviewerId: form.interviewer })
   const { startListening, stopListening, speak, stopSpeaking, isSpeaking, acquireMic, releaseMic } = speech
 
   const { saveStatus, queueSave, markSkipped, resetSave, retrySave } = useSessionSave({ uid, interviewIdRef })
@@ -121,13 +119,12 @@ export function useInterview({ user, authLoading }) {
 
   const setupMode = speech.voiceOk && form.inputPref === "voice" ? "voice" : "text"
 
-
-
-    // An interrupted interview from this tab, offered on the setup screen. Read from sessionStorage
+  // An interrupted interview from this tab, offered on the setup screen. Read from sessionStorage
   // only while the setup screen is showing. draftTick forces a re-read after Discard.
   const [draftTick, setDraftTick] = useState(0)
   const savedDraft = useMemo(
     () => (uid && screen === "setup" ? loadDraft(uid) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- draftTick is only there to force a re-read
     [uid, screen, draftTick]
   )
   const draftSummary = useMemo(
@@ -183,12 +180,12 @@ export function useInterview({ user, authLoading }) {
     setOrbState("listening")
     startListening({
       promptShownAt: promptShownAtRef.current,
-      lang: form.speechLang,
+      lang: SPEECH_LANG,
       onFinal: handleVoiceFinal,
       onEmpty: handleEmptyAnswer,
       onError: handleListenError,
     })
-  }, [startListening, form.speechLang, handleVoiceFinal, handleEmptyAnswer, handleListenError])
+  }, [startListening, handleVoiceFinal, handleEmptyAnswer, handleListenError])
 
   const presentQuestion = useCallback(
     (question) => {
@@ -434,10 +431,7 @@ export function useInterview({ user, authLoading }) {
     beginSession,
   })
 
-
-
-
-    // Puts an interrupted interview back exactly where it was. Runs from a click, so the browser
+  // Puts an interrupted interview back exactly where it was. Runs from a click, so the browser
   // allows the question to be read aloud and the mic to open.
   const resumeInterview = () => {
     const draft = savedDraft
@@ -499,11 +493,7 @@ export function useInterview({ user, authLoading }) {
     [session, retryResults]
   )
 
-
-
-
-
-    // Keep the draft in step with the interview. Refs are read inside the effect (not during render),
+  // Keep the draft in step with the interview. Refs are read inside the effect (not during render),
   // and the effect re-runs on every change that matters: a new question, a new answer, a follow-up
   // starting or ending, and the final scoring beginning. Retries are not saved.
   useEffect(() => {
@@ -546,10 +536,6 @@ export function useInterview({ user, authLoading }) {
   useUnloadGuard(
     screen === "interview" || (screen === "summary" && (saveStatus === "saving" || saveStatus === "error"))
   )
-
-
-
-
 
   return buildInterviewApi({
     screen,

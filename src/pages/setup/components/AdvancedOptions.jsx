@@ -1,9 +1,8 @@
-import VoiceSettings from "./VoiceSettings"
 import ToggleRow from "./ToggleRow"
 import JobDescriptionInput from "./JobDescriptionInput"
 import { MIN_JD_CHARS, MAX_JD_CHARS } from "../../../lib/limits"
 
-// The collapsed "More options" section: voice and accent, follow-ups, job description, privacy.
+// The collapsed "More options" section: follow-ups, job description, and saving to history.
 export default function AdvancedOptions({ setup }) {
   const jdReason =
     setup.aiMode !== "full"
@@ -19,24 +18,10 @@ export default function AdvancedOptions({ setup }) {
     <details className="advanced-options">
       <summary>
         More options
-        <span className="advanced-sub">Voice &amp; accent, follow-ups, job description, privacy</span>
+        <span className="advanced-sub">Follow-ups, job description, saving</span>
       </summary>
 
       <div className="advanced-body">
-        <VoiceSettings
-          support={setup.support}
-          lang={setup.speechLang}
-          onSelectAccent={setup.selectAccent}
-          voices={setup.voices}
-          voiceURI={setup.ttsVoiceURI}
-          onVoice={setup.setTtsVoiceURI}
-          rate={setup.ttsRate}
-          onRate={setup.setTtsRate}
-          onPreviewAccent={setup.previewAccent}
-          onPreviewVoice={setup.previewVoice}
-          onStopPreview={setup.stopPreview}
-        />
-
         <ToggleRow
           title="Follow-up questions"
           description={`After some answers the AI asks one probing follow-up based on what you said. Full AI Mode only. Uses up to ${setup.maxFollowUps} extra AI evaluations.`}

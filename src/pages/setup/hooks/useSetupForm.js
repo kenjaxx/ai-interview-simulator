@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react"
+import { useState, useEffect } from "react"
 import {
   ROLES,
   CUSTOM_ROLE,
@@ -10,7 +10,7 @@ import {
 } from "../../../lib/options"
 import { readStored, writeStored } from "../../../lib/storage"
 import { MODE_STORAGE_KEY } from "../../../lib/interviewConfig"
-import { DEFAULT_LANG, DEFAULT_RATE, RATE_MIN, RATE_MAX, isValidLang } from "../../../lib/speechOptions"
+import { DEFAULT_INTERVIEWER, isInterviewerId } from "../../../lib/interviewers"
 import { usePreference } from "../../../common/hooks/usePreference"
 
 const isBool = (v) => typeof v === "boolean"
@@ -35,15 +35,14 @@ export function useSetupForm() {
     isLength
   )
   const [questionType, setQuestionType] = usePreference("interview-ai-question-type", "mixed", isType)
-  const [speechLang, setSpeechLang] = usePreference("interview-ai-lang", DEFAULT_LANG, isValidLang)
-  const [ttsVoiceURI, setTtsVoiceURI] = usePreference("interview-ai-tts-voice", "", isString)
-  const [ttsRate, setTtsRate] = usePreference(
-    "interview-ai-tts-rate",
-    DEFAULT_RATE,
-    (v) => typeof v === "number" && v >= RATE_MIN && v <= RATE_MAX
-  )
   const [followUps, setFollowUps] = usePreference("interview-ai-follow-ups", false, isBool)
   const [saveHistory, setSaveHistory] = usePreference("interview-ai-save-history", true, isBool)
+  // The interviewer decides both the face and the voice.
+  const [interviewer, setInterviewer] = usePreference(
+    "interview-ai-interviewer",
+    DEFAULT_INTERVIEWER,
+    isInterviewerId
+  )
 
   useEffect(() => {
     writeStored(MODE_STORAGE_KEY, aiMode)
@@ -52,18 +51,6 @@ export function useSetupForm() {
   // The role that is actually used: the preset, or the cleaned-up custom text.
   const effectiveRole = role === CUSTOM_ROLE ? sanitizeRole(customRole) : role
   const roleReady = effectiveRole.length >= MIN_ROLE_CHARS
-
-  // Picking an accent also drops any manually chosen voice. Otherwise a voice picked earlier
-  // (say a UK one) would keep speaking after switching to Australia. With the voice cleared,
-  // useTextToSpeech automatically uses the best installed voice for the new accent.
-  const selectAccent = useCallback(
-    (code) => {
-      if (!isValidLang(code)) return
-      setSpeechLang(code)
-      setTtsVoiceURI("")
-    },
-    [setSpeechLang, setTtsVoiceURI]
-  )
 
   return {
     role,
@@ -84,15 +71,11 @@ export function useSetupForm() {
     setQuestionCount,
     questionType,
     setQuestionType,
-    speechLang,
-    selectAccent,
-    ttsVoiceURI,
-    setTtsVoiceURI,
-    ttsRate,
-    setTtsRate,
     followUps,
     setFollowUps,
     saveHistory,
     setSaveHistory,
+    interviewer,
+    setInterviewer,
   }
 }

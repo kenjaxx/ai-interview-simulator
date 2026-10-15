@@ -1,6 +1,6 @@
 /* Interview page: everything scales with the screen height (dvh). On short screens, such as a phone
-   with the keyboard open, the orb and progress bar shrink or hide so the question and the answer
-   box always fit. Scoped under .page--interview. */
+   with the keyboard open, the interviewer shrinks so the question and the answer box always fit.
+   Scoped under .page--interview. */
 
 .page--interview .interview-shell {
   flex: 1 1 auto;
@@ -13,9 +13,10 @@
   padding: clamp(8px, 2dvh, 24px) 16px calc(12px + env(safe-area-inset-bottom));
 }
 
-.page--interview .orb {
-  width: clamp(56px, 12dvh, 96px);
-  height: clamp(56px, 12dvh, 96px);
+/* The interviewer's face and its progress ring. */
+.page--interview .stage {
+  width: clamp(88px, 21dvh, 172px);
+  height: clamp(88px, 21dvh, 172px);
 }
 
 .page--interview .question-text {
@@ -69,10 +70,7 @@
 
 @media (max-height: 700px) {
   .page--interview .progress-label {
-    display: none;
-  }
-  .page--interview .interview-progress {
-    max-width: 280px;
+    display: none; /* the ring already shows progress */
   }
   .page--interview .shortcut-hint {
     display: none;
@@ -83,12 +81,11 @@
 }
 
 @media (max-height: 520px) {
-  /* Keyboard open on a phone, or a landscape phone. The label ("Listening...") still shows the state. */
-  .page--interview .orb {
-    display: none;
-  }
-  .page--interview .interview-progress {
-    display: none;
+  /* Keyboard open on a phone, or a landscape phone. The face shrinks to a small badge and the
+     label ("Maya · Listening…") still shows the state. */
+  .page--interview .stage {
+    width: 64px;
+    height: 64px;
   }
   .page--interview .transcript-review-sub {
     display: none;

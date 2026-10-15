@@ -1,11 +1,10 @@
-import Orb from "./components/Orb"
 import Header from "../../common/components/Header"
+import InterviewerStage from "./components/InterviewerStage"
 import LiveTranscript from "./components/LiveTranscript"
 import TypingPanel from "./components/TypingPanel"
 import TranscriptReview from "./components/TranscriptReview"
 import AnswerTimer from "./components/AnswerTimer"
 import DoneShortcut from "./components/DoneShortcut"
-import InterviewProgress from "./components/InterviewProgress"
 import InterviewControls from "./components/InterviewControls"
 import { MAX_ANSWER_CHARS } from "../../lib/limits"
 import "./interview.fit.css"
@@ -49,14 +48,15 @@ export default function InterviewScreen({ interview }) {
           {progress}
         </p>
 
-        {!isRetry && (
-          <InterviewProgress current={interview.questionIndex} total={interview.questionTotal} done={scoring} />
-        )}
-
-        <Orb
+        <InterviewerStage
           state={interview.orbState}
+          interviewerId={interview.interviewerId}
           getLevel={interview.getLevel}
           subscribeWord={interview.subscribeWord}
+          current={interview.questionIndex}
+          total={interview.questionTotal}
+          done={scoring}
+          showRing={!isRetry}
         />
 
         {preparingFollowUp && (

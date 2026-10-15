@@ -1,5 +1,6 @@
 import AdvancedOptions from "./AdvancedOptions"
 import { QUESTION_TYPES } from "../../../lib/options"
+import { getInterviewer } from "../../../lib/interviewers"
 
 // Step 3: a summary of the choices, the collapsed advanced options, and the privacy details.
 // The "Start interview" button lives in SetupScreen's navigation row.
@@ -13,6 +14,8 @@ export default function StartStep({ setup }) {
         <dd>{setup.effectiveRole}</dd>
         <dt>Level</dt>
         <dd>{setup.seniority}</dd>
+        <dt>Interviewer</dt>
+        <dd>{getInterviewer(setup.interviewer).name}</dd>
         <dt>Scoring</dt>
         <dd>{setup.aiMode === "full" ? "Full AI Mode" : "Practice Mode"}</dd>
         <dt>Answers</dt>

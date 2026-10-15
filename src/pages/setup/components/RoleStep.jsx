@@ -1,6 +1,7 @@
 import { ROLES, SENIORITIES, CUSTOM_ROLE, MAX_ROLE_CHARS, MIN_ROLE_CHARS } from "../../../lib/options"
+import InterviewerPicker from "./InterviewerPicker"
 
-// Step 1: target role (a preset or your own), and seniority.
+// Step 1: target role (a preset or your own), seniority, and who interviews you.
 export default function RoleStep({ setup }) {
   const custom = setup.role === CUSTOM_ROLE
   const typed = setup.customRole.trim().length > 0
@@ -63,6 +64,14 @@ export default function RoleStep({ setup }) {
           ))}
         </select>
       </div>
+
+      <InterviewerPicker
+        value={setup.interviewer}
+        onChange={setup.setInterviewer}
+        voices={setup.voices}
+        speechOk={setup.support.synthesis}
+        disabled={setup.starting}
+      />
     </>
   )
 }

@@ -1,0 +1,135 @@
+/* ---------- Stage: ring + avatar + label ---------- */
+
+.stage-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.stage {
+  position: relative;
+  width: 132px;
+  height: 132px;
+  flex-shrink: 0;
+}
+
+.stage-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.ring-seg {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 3;
+  stroke-linecap: round;
+  transition: stroke 0.3s ease;
+}
+.ring-seg--done {
+  stroke: var(--accent);
+}
+.ring-seg--current {
+  stroke: var(--accent);
+  opacity: 0.55;
+}
+
+.stage-label {
+  margin: 0;
+  font-size: 13px;
+  color: var(--t-muted);
+  letter-spacing: 0.02em;
+}
+
+/* ---------- Avatar ---------- */
+
+/* The border takes its color from the same tokens the orb used, so it follows light and dark mode. */
+.avatar {
+  --halo: var(--orb-idle);
+  position: absolute;
+  inset: 8%;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 3px solid var(--halo);
+  overflow: hidden;
+  transition:
+    transform 0.12s ease-out,
+    border-color 0.3s ease;
+  will-change: transform;
+}
+.avatar svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.avatar--listening {
+  --halo: var(--orb-listening);
+}
+.avatar--thinking {
+  --halo: var(--orb-thinking);
+}
+.avatar--speaking {
+  --halo: var(--orb-speaking);
+}
+
+/* ---------- Expressions (driven only by the state class) ---------- */
+
+.av-eyes,
+.av-brows {
+  transition: transform 0.25s ease;
+}
+.avatar--thinking .av-eyes {
+  transform: translate(3px, -3px); /* looks up and to the side */
+}
+.avatar--thinking .av-brows {
+  transform: translateY(-3px);
+}
+.avatar--listening .av-brows {
+  transform: translateY(-1.5px);
+}
+
+.av-eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 0.08s ease;
+}
+.avatar--listening .av-eye {
+  transform: scaleY(1.2); /* eyes a little wider while listening */
+}
+.avatar.is-blinking .av-eye {
+  transform: scaleY(0.12);
+}
+
+/* ---------- Thinking dots ---------- */
+
+.av-dots {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.avatar--thinking .av-dots {
+  opacity: 1;
+}
+.av-dot {
+  fill: var(--orb-thinking);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: av-dot 1s ease-in-out infinite;
+}
+.av-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.av-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes av-dot {
+  0%,
+  100% {
+    transform: scale(0.7);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+}
