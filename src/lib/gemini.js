@@ -106,9 +106,7 @@ export function fetchUsage(uid = "") {
   return request
 }
 
-// Asks Gemini for interview questions tailored to a pasted job description. Costs one AI evaluation.
-// Returns { questions: string[], usage }.
-export async function generateQuestions({ role, seniority, jobDescription, count }) {
+export async function generateQuestions({ role, seniority, jobDescription = "", count, type = "mixed" }) {
   if (MOCK_MODE) {
     await mockDelay()
     return {
@@ -119,8 +117,9 @@ export async function generateQuestions({ role, seniority, jobDescription, count
       usage: null,
     }
   }
-  const body = await callBackend({ action: "questions", role, seniority, jobDescription, count }, (b) =>
-    Array.isArray(b.questions)
+  const body = await callBackend(
+    { action: "questions", role, seniority, jobDescription, count, type },
+    (b) => Array.isArray(b.questions)
   )
   return { questions: body.questions, usage: body.usage ?? null }
 }

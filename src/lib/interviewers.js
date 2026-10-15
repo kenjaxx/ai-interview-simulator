@@ -1,9 +1,11 @@
-// The interviewers a user can pick on the setup screen. Each one has a look and a voice:
+
+ // The interviewers a user can pick on the setup screen. Each one has a look and a voice:
 //   skin, hair, blazer ...  colors for the face drawing (fixed, so they read well in both themes)
 //   voice.names             the exact text-to-speech voices wanted, best first
 //   voice.lang              the accent, used to find a stand-in when those voices aren't installed
 //   voice.gender            "male" | "female", so a stand-in still sounds right
 //   voice.rate              optional speaking speed (1 = normal)
+//   voice.pitch             optional pitch adjustment for stand-in voices (1 = normal)
 // Which voices exist depends on the browser and operating system, see voices.js.
 
 export const INTERVIEWERS = [
@@ -17,7 +19,13 @@ export const INTERVIEWERS = [
     blazer: "#3C3489",
     shirt: "#EEEDFE",
     bg: "#2a2540",
-    voice: { names: ["Google UK English Male"], lang: "en-GB", gender: "male", rate: 1 },
+    voice: {
+      names: ["Google UK English Male"],
+      lang: "en-GB",
+      gender: "male",
+      rate: 1,
+      pitch: 0.95,
+    },
   },
   {
     id: "maya",
@@ -29,7 +37,13 @@ export const INTERVIEWERS = [
     blazer: "#0F6E56",
     shirt: "#E1F5EE",
     bg: "#16302b",
-    voice: { names: ["Google UK English Female"], lang: "en-GB", gender: "female", rate: 1 },
+    voice: {
+      names: ["Google UK English Female"],
+      lang: "en-GB",
+      gender: "female",
+      rate: 1,
+      pitch: 1.05,
+    },
   },
   {
     id: "daniel",
@@ -46,6 +60,7 @@ export const INTERVIEWERS = [
       lang: "en-US",
       gender: "male",
       rate: 1,
+      pitch: 0.8,
     },
   },
   {
@@ -58,7 +73,13 @@ export const INTERVIEWERS = [
     blazer: "#185FA5",
     shirt: "#E6F1FB",
     bg: "#16283d",
-    voice: { names: ["Google US English"], lang: "en-US", gender: "female", rate: 1 },
+    voice: {
+      names: ["Google US English"],
+      lang: "en-US",
+      gender: "female",
+      rate: 1,
+      pitch: 1,
+    },
   },
 ]
 

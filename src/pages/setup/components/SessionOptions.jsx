@@ -1,5 +1,5 @@
 import SegmentedControl from "./SegmentedControl"
-import { SESSION_LENGTHS, QUESTION_TYPES, CUSTOM_ROLE } from "../../../lib/options"
+import { SESSION_LENGTHS, QUESTION_TYPES } from "../../../lib/options"
 
 const LENGTH_NAMES = { 3: "Quick", 6: "Standard", 10: "Deep" }
 
@@ -13,7 +13,7 @@ const TYPE_HINTS = {
 export default function SessionOptions({ setup }) {
   const lengthOptions = SESSION_LENGTHS.map((n) => ({ value: n, label: `${n} · ${LENGTH_NAMES[n] ?? ""}`.trim() }))
   const typeOptions = QUESTION_TYPES.map((t) => ({ value: t.id, label: t.label }))
-  const customTechnical = setup.role === CUSTOM_ROLE && setup.questionType === "technical"
+  
 
   return (
     <>
@@ -43,12 +43,6 @@ export default function SessionOptions({ setup }) {
           disabled={setup.starting}
         />
         <p className="mode-notice">{TYPE_HINTS[setup.questionType]}</p>
-        {customTechnical && (
-          <p className="mode-notice mode-notice--warn">
-            The built-in bank has no technical questions for a custom role. Use Full AI Mode and paste a job
-            description to get role-specific ones.
-          </p>
-        )}
       </div>
     </>
   )

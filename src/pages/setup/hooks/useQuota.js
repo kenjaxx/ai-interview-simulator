@@ -17,7 +17,7 @@ const utcDay = (ms) => new Date(ms).toISOString().slice(0, 10)
 //     belongs to a previous UTC day (the server's daily reset), or doesn't exist yet.
 //   - The "Retry" button in the quota meter always refetches.
 //   - Simultaneous requests for the same user share one network call (see fetchUsage).
-export function useQuota({ uid, screen, aiMode }) {
+export function useQuota({ uid, screen, aiMode, requireFull = false }) {
   const [quota, setQuota] = useState(null)
   const [quotaStatus, setQuotaStatus] = useState("idle") // "idle" | "loading" | "ready" | "error"
   const quotaRef = useRef(null) // mirrors `quota` so async code never reads a stale value
@@ -88,22 +88,25 @@ export function useQuota({ uid, screen, aiMode }) {
   // Full AI stays available and the server enforces the limit anyway.
   const quotaExhausted = !!quota && (quota.remaining <= 0 || quota.globalExhausted)
   // The stored preference is kept as-is, but the mode actually used drops to Practice while exhausted.
-  const effectiveMode = aiMode === "full" && !quotaExhausted ? "full" : "practice"
+  const effectiveMode = (aiMode === "full" || requireFull) && !quotaExhausted ? "full" : "practice"
+// A custom role needs Full AI Mode and 2 evaluations (questions + scoring).
+  const customRoleBlocked = requireFull && (quotaExhausted || (!!quota && quota.remaining < 2))
   // Tailored questions cost one evaluation and scoring needs another, so require two.
   const jdAvailable = effectiveMode === "full" && (!quota || quota.remaining >= 2)
   // Follow-ups need Full AI Mode and enough quota for scoring plus the follow-ups themselves.
   const followUpsAvailable = effectiveMode === "full" && (!quota || quota.remaining >= FOLLOW_UP_SETUP_QUOTA)
 
-  return {
-    quota,
-    quotaRef,
-    quotaStatus,
-    quotaExhausted,
-    effectiveMode,
-    jdAvailable,
-    followUpsAvailable,
-    applyUsage,
-    refreshQuota,
-    resetQuota,
-  }
+ return {
+  quota,
+  quotaRef,
+  quotaStatus,
+  quotaExhausted,
+  effectiveMode,
+  customRoleBlocked,
+  jdAvailable,
+  followUpsAvailable,
+  applyUsage,
+  refreshQuota,
+  resetQuota,
+}
 }

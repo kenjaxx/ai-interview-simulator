@@ -8,56 +8,35 @@ import { normLang } from "./speechOptions"
 // voice, then the browser's own default (voice: null).
 
 const FEMALE_NAMES = [
-  "zira",
-  "hazel",
-  "susan",
-  "samantha",
-  "victoria",
-  "karen",
-  "moira",
-  "tessa",
-  "fiona",
-  "kate",
-  "serena",
-  "martha",
-  "libby",
-  "sonia",
-  "jenny",
-  "aria",
-  "emma",
-  "amy",
-  "heather",
-  "linda",
-  "catherine",
-  "ava",
+  "zira", "hazel", "susan", "samantha", "victoria", "karen", "moira", "tessa", "fiona", "kate",
+  "serena", "martha", "libby", "sonia", "jenny", "aria", "emma", "amy", "heather", "linda",
+  "catherine", "ava",
 ]
 
 const MALE_NAMES = [
-  "david",
-  "mark",
-  "james",
-  "george",
-  "daniel",
-  "alex",
-  "fred",
-  "ryan",
-  "thomas",
-  "oliver",
-  "arthur",
-  "aaron",
-  "gordon",
-  "rishi",
-  "richard",
-  "guy",
-  "tom",
+  "david", "mark", "james", "george", "daniel", "alex", "fred", "ryan", "thomas", "oliver",
+  "arthur", "aaron", "gordon", "rishi", "richard", "guy", "tom",
 ]
+
+// Android's Google voices have no human names, only codes like "en-us-x-iol-local".
+// These are the three-letter codes of the English voices (US, UK, AU) and their gender.
+const ANDROID_MALE = new Set(["iol", "iom", "tpd", "gbb", "gbd", "rjs", "aub", "aud"])
+const ANDROID_FEMALE = new Set(["iob", "iof", "iog", "sfg", "tpc", "tpf", "gba", "gbc", "fis", "aua", "auc"])
 
 const hasWord = (lower, words) => words.some((w) => new RegExp(`\\b${w}\\b`).test(lower))
 
 // "female" is checked before "male", and both as whole words, so "Female" is never read as "male".
+// Looks at the voice name and, when given, its URI (Android puts the code there).
 // Returns "female", "male" or "unknown" (for example "Google US English" says nothing about gender).
-export function genderOf(name) {
-  const lower = String(name ?? "").toLowerCase()
+export function genderOf(name, uri = "") {
+  const lower = `${name ?? ""} ${uri ?? ""}`.toLowerCase()
+
+  if (lower.includes("#female")) return "female"
+  if (lower.includes("#male")) return "male"
+  const code = lower.match(/-x-([a-z]{3})\b/)?.[1]
+  if (code && ANDROID_FEMALE.has(code)) return "female"
+  if (code && ANDROID_MALE.has(code)) return "male"
+
   if (/\bfemale\b/.test(lower) || hasWord(lower, FEMALE_NAMES)) return "female"
   if (/\bmale\b/.test(lower) || hasWord(lower, MALE_NAMES)) return "male"
   return "unknown"
@@ -96,7 +75,7 @@ export function resolveVoice(person, voices) {
 
   const english = list.filter((v) => normLang(v.lang).startsWith("en"))
   const sameLang = english.filter((v) => normLang(v.lang) === normLang(lang))
-  const withGender = (pool) => pool.filter((v) => genderOf(v.name) === gender)
+  const withGender = (pool) => pool.filter((v) => genderOf(v.name, v.voiceURI) === gender)
 
   const similar = best(withGender(sameLang)) || best(withGender(english)) || best(sameLang) || best(english)
   return similar ? { voice: similar, match: "similar" } : { voice: null, match: "default" }

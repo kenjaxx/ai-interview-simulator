@@ -34,7 +34,7 @@ export const geminiUrl = (model) =>
 // each with feedback, a tip and a sample answer).
 export const GEMINI_PROFILES = {
   evaluate: { maxOutputTokens: 12288, attemptTimeoutMs: 34_000, totalBudgetMs: 52_000 },
-  questions: { maxOutputTokens: 2048, attemptTimeoutMs: 20_000, totalBudgetMs: 40_000 },
+  questions: { maxOutputTokens: 4096, attemptTimeoutMs: 25_000, totalBudgetMs: 45_000 },
   followup: { maxOutputTokens: 2048, attemptTimeoutMs: 15_000, totalBudgetMs: 30_000 },
 }
 

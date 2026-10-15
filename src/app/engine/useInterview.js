@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react"
 
-import { ROLES } from "../../lib/options"
+
 import { findWeakestIndex } from "../../lib/scores"
 import { DEFAULT_QUESTION_COUNT } from "../../lib/interviewConfig"
 import { SPEECH_LANG } from "../../lib/speechOptions"
@@ -17,6 +17,7 @@ import { createInterviewControls } from "./interviewControls"
 import { buildInterviewApi } from "./buildInterviewApi"
 import { useUnloadGuard } from "./useUnloadGuard"
 import { saveDraft, loadDraft, clearDraft } from "../../lib/draft"
+import { ROLES, CUSTOM_ROLE } from "../../lib/options"
 // Runs an interview: the question loop. Everything else is delegated:
 //   useSetupForm        what the user picked on the setup screen
 //   useQuota            daily AI allowance
@@ -85,18 +86,20 @@ export function useInterview({ user, authLoading }) {
   // ---------- the focused hooks ----------
 
   const form = useSetupForm()
-  const {
-    quota,
-    quotaRef,
-    quotaStatus,
-    quotaExhausted,
-    effectiveMode,
-    jdAvailable,
-    followUpsAvailable,
-    applyUsage,
-    refreshQuota,
-    resetQuota,
-  } = useQuota({ uid, screen, aiMode: form.aiMode })
+const requiresFullAi = form.role === CUSTOM_ROLE
+const {
+  quota,
+  quotaRef,
+  quotaStatus,
+  quotaExhausted,
+  effectiveMode,
+  customRoleBlocked,
+  jdAvailable,
+  followUpsAvailable,
+  applyUsage,
+  refreshQuota,
+  resetQuota,
+} = useQuota({ uid, screen, aiMode: form.aiMode, requireFull: requiresFullAi })
 
   // The chosen interviewer decides which voice reads the questions.
   const speech = useSpeechIO({ interviewerId: form.interviewer })
@@ -417,7 +420,7 @@ export function useInterview({ user, authLoading }) {
     presentQuestion(questions[0])
   }
 
-  const startInterview = createStartInterview({
+  const startInterview = createStartInterview({  
     form,
     effectiveMode,
     jdAvailable,
@@ -429,6 +432,8 @@ export function useInterview({ user, authLoading }) {
     setNotice,
     interviewIdRef,
     beginSession,
+    requiresFullAi,
+    customRoleBlocked,
   })
 
   // Puts an interrupted interview back exactly where it was. Runs from a click, so the browser
@@ -583,5 +588,7 @@ export function useInterview({ user, authLoading }) {
     weakestIndex,
     startRetry,
     cancelRetry,
+    requiresFullAi,
+    customRoleBlocked,
   })
 }

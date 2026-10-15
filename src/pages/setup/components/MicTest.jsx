@@ -23,7 +23,7 @@ export default function MicTest({ mic }) {
   const start = async () => {
     setPhase("starting")
     setHeard(false)
-    const ok = await acquireMic()
+    const ok = await acquireMic({ force: true })
     if (!ok) {
       const err = getMicError()
       if (err) {

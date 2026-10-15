@@ -108,14 +108,20 @@ export default function SetupScreen({ setup, onHistory }) {
                 Next
               </button>
             ) : (
-              <button
-                type="button"
-                className="primary-btn"
-                onClick={setup.start}
-                disabled={setup.starting || !setup.roleReady}
-              >
-                {setup.starting ? "Preparing your questions…" : "Start interview"}
-              </button>
+             
+<button
+  type="button"
+  className="primary-btn"
+  onClick={setup.start}
+  disabled={
+    setup.starting ||
+    !setup.roleReady ||
+    setup.customRoleBlocked
+  }
+>
+  {setup.starting ? "Preparing your questions…" : "Start interview"}
+</button>
+
             )}
           </div>
 

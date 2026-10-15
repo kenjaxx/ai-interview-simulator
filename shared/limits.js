@@ -6,7 +6,7 @@
 // Job-description question generation
 export const MIN_JD_CHARS = 40
 export const MAX_JD_CHARS = 4000
-export const MAX_GENERATED_QUESTIONS = 5
+export const MAX_GENERATED_QUESTIONS = 10
 export const MAX_GENERATED_QUESTION_CHARS = 300
 
 // Follow-up question generation

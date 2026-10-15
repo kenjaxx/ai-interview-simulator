@@ -1,27 +1,41 @@
 import { useRef, useCallback, useEffect } from "react"
+import { isMobileDevice } from "../../lib/support"
 
 // Manages one microphone stream and exposes a getLevel() function that reads the current
-// volume (0 to 1) on demand. Used for the whole interview and for the microphone test on setup.
+// volume (0 to 1) on demand. Used for the interview's level meter and for the microphone test.
 //
 // There is deliberately NO React state and NO animation loop in here. Whoever needs the level
-// (the Orb, the mic test) polls getLevel() from its own requestAnimationFrame loop and writes
-// straight to the DOM, so mic volume never triggers a React re-render.
+// polls getLevel() from its own requestAnimationFrame loop and writes straight to the DOM.
+//
+// On phones the stream is NOT opened during the interview: speech recognition already uses the mic,
+// and a second stream on top of it triggers extra permission prompts, makes the phone lower the
+// playback volume and can leave the recognizer without a mic. getLevel() simply returns 0 there.
+// The setup screen's mic test passes { force: true } to open it on purpose.
 //
 // acquireMic() is idempotent: call it as often as you like, the stream is only opened once.
-// It resolves to false if the mic couldn't be opened; getMicError() then returns the reason
-// (null if the attempt was only cancelled by releaseMic).
+// It resolves to false if the mic wasn't opened; getMicError() then returns the reason
+// (null if it was skipped or cancelled).
 // releaseMic() must be called when the interview or test ends.
+const SKIP_ON_MOBILE = isMobileDevice()
+
+// Echo cancellation, noise suppression and auto gain put phones into "call" audio mode (quiet
+// playback). The level meter doesn't need them.
+const RAW_AUDIO = {
+  audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+}
+
 export function useAudioLevel() {
   const audioContextRef = useRef(null)
   const analyserRef = useRef(null)
   const streamRef = useRef(null)
   const dataRef = useRef(null)
-  const pendingRef = useRef(null) // in-flight acquire, so concurrent calls share one getUserMedia
-  const acquireIdRef = useRef(0) // bumped by acquire and release, so a late acquire can detect it was cancelled
-  const errorRef = useRef(null) // why the last acquire failed
+  const pendingRef = useRef(null)
+  const acquireIdRef = useRef(0)
+  const errorRef = useRef(null)
 
-  const acquireMic = useCallback(() => {
-    // Already have a live stream: just make sure the context isn't suspended.
+  const acquireMic = useCallback((options = {}) => {
+    if (SKIP_ON_MOBILE && !options.force) return Promise.resolve(false)
+
     if (streamRef.current) {
       audioContextRef.current?.resume?.().catch(() => {})
       return Promise.resolve(true)
@@ -34,9 +48,8 @@ export function useAudioLevel() {
     const run = async () => {
       let stream = null
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        stream = await navigator.mediaDevices.getUserMedia(RAW_AUDIO)
 
-        // releaseMic() was called while we were waiting for permission: don't keep the stream.
         if (acquireIdRef.current !== id) {
           stream.getTracks().forEach((track) => track.stop())
           return false
@@ -84,7 +97,7 @@ export function useAudioLevel() {
   const getMicError = useCallback(() => errorRef.current, [])
 
   const releaseMic = useCallback(() => {
-    acquireIdRef.current++ // cancels any acquire that's still waiting on permission
+    acquireIdRef.current++
     pendingRef.current = null
 
     streamRef.current?.getTracks().forEach((track) => track.stop())
@@ -98,7 +111,6 @@ export function useAudioLevel() {
     audioContext?.close().catch(() => {})
   }, [])
 
-  // Never leave the mic open after the component goes away.
   useEffect(() => releaseMic, [releaseMic])
 
   return { getLevel, acquireMic, releaseMic, getMicError }

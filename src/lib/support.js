@@ -12,3 +12,11 @@ export function getSupport() {
 export function voiceAvailable(support, micState) {
   return support.recognition && support.mic && micState !== "denied" && micState !== "missing"
 }
+
+// Phones and tablets. On these, a second microphone stream next to speech recognition makes the
+// two fight over the mic (extra permission prompts, quiet playback, "mic not detected").
+export function isMobileDevice() {
+  if (typeof navigator === "undefined") return false
+  const iPadOnMac = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "") || iPadOnMac
+}

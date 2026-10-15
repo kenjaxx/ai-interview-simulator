@@ -3,16 +3,19 @@ import { pickQuestions, getRecentQuestions, rememberQuestions } from "../../lib/
 import { matchesType } from "../../lib/questionTypes"
 import { MIN_JD_CHARS } from "../../lib/limits"
 import { JD_QUESTION_COUNT } from "../../lib/interviewConfig"
+import { resetPhrase } from "../../lib/time"
+import { messageForError } from "../../lib/errorMessages"
 
 // Builds the "Start interview" handler. Not a hook: it returns a plain function that closes over
 // the current setup choices, so it always sees what the user picked at the moment of the click.
 //
-// It captures the choices, optionally asks the AI for questions tailored to a job description,
-// picks the rest from the local bank (honouring session length and question type), and hands the
-// finished list to beginSession().
+// Preset roles: questions come from the local bank (plus optional job-description questions).
+// Custom role ("Other"): Full AI Mode only, and ALL questions are written by the AI for that role.
 export function createStartInterview({
   form,
   effectiveMode,
+  requiresFullAi,
+  customRoleBlocked,
   jdAvailable,
   followUpsAvailable,
   setupMode,
@@ -25,6 +28,13 @@ export function createStartInterview({
 }) {
   return async function startInterview() {
     if (starting || !form.roleReady) return
+
+    if (customRoleBlocked) {
+      setNotice(
+        `Custom roles need Full AI Mode and 2 AI evaluations (one for your questions, one for scoring). They reset ${resetPhrase()}. Pick a preset role to use Practice Mode.`
+      )
+      return
+    }
 
     // Capture the setup choices now: the user could touch the form while questions are generated.
     const mode = effectiveMode
@@ -42,26 +52,43 @@ export function createStartInterview({
 
     let custom = []
     let note = null
-    if (useJd) {
+    let failed = false
+    let failReason = ""
+
+    if (requiresFullAi || useJd) {
       setStarting(true)
       try {
         const result = await generateQuestions({
           role,
           seniority,
-          jobDescription: jd,
-          count: Math.min(JD_QUESTION_COUNT, count),
+          jobDescription: useJd ? jd : "",
+          // A custom role gets a full set from the AI. A preset role only adds a few tailored ones.
+          count: requiresFullAi ? count : Math.min(JD_QUESTION_COUNT, count),
+          type,
         })
         custom = result.questions
         applyUsage(result.usage)
-        note = `${custom.length} of these questions are tailored to the job description you pasted.`
+        note = useJd
+          ? `${custom.length} of these questions are tailored to the job description you pasted.`
+          : `These questions were written for your "${role}" role.`
       } catch (err) {
         console.error("Couldn't generate tailored questions:", err)
-        note = "Couldn't generate job-specific questions, so a standard set was used."
+        if (requiresFullAi) {
+          failed = true
+          failReason = messageForError(err)
+        } else {
+          note = "Couldn't generate job-specific questions, so a standard set was used."
+        }
       } finally {
         setStarting(false)
       }
       // The user signed out or restarted while we were waiting.
       if (interviewIdRef.current !== interviewId) return
+
+      if (failed) {
+        setNotice(`Couldn't write questions for your custom role. ${failReason}`)
+        return
+      }
     }
 
     const questions = pickQuestions(role, seniority, count, {
@@ -72,7 +99,7 @@ export function createStartInterview({
     const fromBank = questions.filter((q) => !custom.includes(q))
     rememberQuestions(fromBank)
 
-    // The bank can run short for a type (a custom role has no technical questions, for example).
+    // The bank can run short for a type on a preset role.
     const offType = type === "mixed" ? 0 : fromBank.filter((q) => !matchesType(q, type)).length
     if (offType > 0) {
       const shortfall = `Only ${fromBank.length - offType} ${type} question${

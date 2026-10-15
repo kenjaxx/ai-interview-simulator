@@ -46,7 +46,7 @@ export default function RoleStep({ setup }) {
           >
             {typed && !setup.roleReady
               ? `Use at least ${MIN_ROLE_CHARS} letters or numbers.`
-              : "Full AI Mode uses this to judge your answers and write follow-ups. The built-in question bank has no questions for custom roles, so you'll get general ones. Paste a job description in Full AI Mode for tailored questions."}
+              : "Custom roles always use Full AI Mode: the AI writes the questions for your role, judges your answers and writes follow-ups. Uses 2 AI evaluations per session. Pasting a job description (optional) makes the questions even more specific."}
           </p>
         </div>
       )}

@@ -53,19 +53,23 @@ export function validateEvaluateInput(body) {
   return { role, seniority, qas: cleanQas }
 }
 
+const QUESTION_TYPES = ["mixed", "behavioral", "technical"]
+
 export function validateQuestionsInput(body) {
   const { role, seniority } = validateRoleAndSeniority(body)
   const jobDescription = typeof body.jobDescription === "string" ? body.jobDescription.trim() : ""
 
-  if (jobDescription.length < MIN_JD_CHARS) {
+  // Empty is allowed: the questions are then written for the role alone (custom roles).
+  if (jobDescription.length > 0 && jobDescription.length < MIN_JD_CHARS) {
     throw new HttpError(400, "Paste a longer job description (at least a couple of sentences).")
   }
   if (jobDescription.length > MAX_JD_CHARS) {
     throw new HttpError(400, `That job description is too long (max ${MAX_JD_CHARS} characters).`)
   }
 
+  const type = QUESTION_TYPES.includes(body.type) ? body.type : "mixed"
   const count = Math.round(clampNumber(body.count, 1, MAX_GENERATED_QUESTIONS))
-  return { role, seniority, jobDescription, count }
+  return { role, seniority, jobDescription, count, type }
 }
 
 export function validateFollowUpInput(body) {

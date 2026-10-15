@@ -30,6 +30,8 @@ export function buildInterviewApi(c) {
       quota: c.quota,
       quotaStatus: c.quotaStatus,
       quotaExhausted: c.quotaExhausted,
+      requiresFullAi: c.requiresFullAi,
+      customRoleBlocked: c.customRoleBlocked,
       refreshQuota: c.refreshQuota,
       jobDescription: form.jobDescription,
       setJobDescription: form.setJobDescription,
