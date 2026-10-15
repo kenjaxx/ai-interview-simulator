@@ -7,11 +7,17 @@ import StartStep from "./components/StartStep"
 import ResumeCard from "./components/ResumeCard"
 import "./setup.css"
 import "./setup.fit.css"
+
 const STEP_TITLES = ["Choose your role", "Choose how to practice", "Review and start"]
 const LAST_STEP = STEP_TITLES.length - 1
 
+// Decorative "voice" bars on the left. Heights are percentages of the bar area.
+const BARS = [30, 55, 80, 45, 95, 60, 35, 75, 50, 25, 65, 40]
+const CHIPS = ["STAR checks", "Voice", "Follow-ups"]
+
 // setup: the `setup` object from useInterview().
-// A three-step flow (Role -> Mode -> Start). Advanced options stay collapsed on the last step.
+// Two sections on wide screens: the pitch on the left, the three-step form on the right.
+// On narrow screens the pitch shrinks to a headline above the form (or disappears on short screens).
 export default function SetupScreen({ setup, onHistory }) {
   const [step, setStep] = useState(0)
   const [reached, setReached] = useState(0) // furthest step visited, so the stepper can jump back and forth
@@ -37,80 +43,91 @@ export default function SetupScreen({ setup, onHistory }) {
   return (
     <div className="page page--setup">
       <Header onHistory={onHistory} />
-      <header className="hero hero--compact">
-        <p className="eyebrow">AI Interview Coach</p>
-        <h1 tabIndex={-1} data-screen-heading>
-          Practice out loud.
-          <br />
-          Get real feedback.
-        </h1>
-        <p className="hero-sub">
-          A live, voice-driven mock interview. Answer out loud, and once you're done the AI scores your
-          content, clarity, and confidence based on what you actually said.
-        </p>
-      </header>
 
-      <div className="setup-card">
-        <ResumeCard
-          draft={setup.draft}
-          onResume={setup.resumeDraft}
-          onDiscard={setup.discardDraft}
-          disabled={setup.starting}
-        />
+      <main className="setup-split">
+        <section className="setup-hero" aria-label="About AI Interview Coach">
+          <h1 tabIndex={-1} data-screen-heading>
+            Practice out loud.
+            <br />
+            Get real feedback.
+          </h1>
+          <p className="hero-sub">Scored on content, clarity and confidence.</p>
 
-        {setup.notice && (
-          <p className="setup-notice" role="status">
-            {setup.notice}
-          </p>
-        )}
+          <div className="wave" aria-hidden="true">
+            {BARS.map((h, i) => (
+              <span key={i} style={{ "--h": `${h}%`, "--d": `${(i * 0.12).toFixed(2)}s` }} />
+            ))}
+          </div>
 
-        <Stepper step={step} reached={reached} onJump={go} disabled={setup.starting} />
+          <ul className="hero-chips" aria-label="Features">
+            {CHIPS.map((c) => (
+              <li key={c}>{c}</li>
+            ))}
+          </ul>
+        </section>
 
-        <h2 className="step-heading" tabIndex={-1} ref={headingRef}>
-          {STEP_TITLES[step]}
-        </h2>
+        <div className="setup-card">
+          <ResumeCard
+            draft={setup.draft}
+            onResume={setup.resumeDraft}
+            onDiscard={setup.discardDraft}
+            disabled={setup.starting}
+          />
 
-        <div className="step-body">
-          {step === 0 && <RoleStep setup={setup} />}
-          {step === 1 && <ModeStep setup={setup} />}
-          {step === 2 && <StartStep setup={setup} />}
-        </div>
-
-        <div className="step-nav">
-          {step > 0 && (
-            <button type="button" className="secondary-btn" onClick={() => go(step - 1)} disabled={setup.starting}>
-              Back
-            </button>
+          {setup.notice && (
+            <p className="setup-notice" role="status">
+              {setup.notice}
+            </p>
           )}
-          {step < LAST_STEP ? (
-            <button
-              type="button"
-              className="primary-btn"
-              onClick={() => go(step + 1)}
-              disabled={step === 0 && !setup.roleReady}
-            >
-              Next
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="primary-btn"
-              onClick={setup.start}
-              disabled={setup.starting || !setup.roleReady}
-            >
-              {setup.starting ? "Preparing your questions…" : "Start interview"}
-            </button>
+
+          <Stepper step={step} reached={reached} onJump={go} disabled={setup.starting} />
+
+          <h2 className="step-heading" tabIndex={-1} ref={headingRef}>
+            {STEP_TITLES[step]}
+          </h2>
+
+          <div className="step-body">
+            {step === 0 && <RoleStep setup={setup} />}
+            {step === 1 && <ModeStep setup={setup} />}
+            {step === 2 && <StartStep setup={setup} />}
+          </div>
+
+          <div className="step-nav">
+            {step > 0 && (
+              <button type="button" className="secondary-btn" onClick={() => go(step - 1)} disabled={setup.starting}>
+                Back
+              </button>
+            )}
+            {step < LAST_STEP ? (
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={() => go(step + 1)}
+                disabled={step === 0 && !setup.roleReady}
+              >
+                Next
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={setup.start}
+                disabled={setup.starting || !setup.roleReady}
+              >
+                {setup.starting ? "Preparing your questions…" : "Start interview"}
+              </button>
+            )}
+          </div>
+
+          {step === LAST_STEP && (
+            <p className="setup-note">
+              {setup.setupMode === "voice"
+                ? `You'll need microphone access — ${setup.questionCount} questions, spoken answers.`
+                : `${setup.questionCount} questions, typed answers.`}
+            </p>
           )}
         </div>
-
-        {step === LAST_STEP && (
-          <p className="setup-note">
-            {setup.setupMode === "voice"
-              ? `You'll need microphone access — ${setup.questionCount} questions, spoken answers.`
-              : `${setup.questionCount} questions, typed answers.`}
-          </p>
-        )}
-      </div>
+      </main>
     </div>
   )
 }

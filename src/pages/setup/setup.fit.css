@@ -1,53 +1,122 @@
-/* Setup page: the hero shrinks (then disappears) on short screens, and the card fills the rest.
-   Only the middle of the card (.step-body) can scroll, and only if a step is still too tall.
-   The stepper and the Back/Next buttons always stay on screen.
+/* Setup page: left = pitch, right = form card. Always exactly one screen.
+   Wide screens: two columns, vertically centered.
+   Narrow screens: one column. Tall ones keep a small headline above the card; short ones show only the card.
+   Only .step-body (inside the card) can scroll, and only if a step is still too tall.
    Everything is scoped under .page--setup so it wins over base.css whatever the load order. */
 
-.page--setup .hero {
-  flex-shrink: 0;
-  padding: clamp(6px, 2dvh, 28px) 16px clamp(6px, 1.5dvh, 16px);
-}
-.page--setup .hero h1 {
-  font-size: clamp(1.35rem, 4.2dvh, 2.4rem);
-  margin: 0 0 0.4rem;
-}
-.page--setup .hero .eyebrow {
-  margin: 0 0 0.35rem;
-}
-.page--setup .hero-sub {
-  max-width: 52ch;
-  margin: 0 auto;
-  font-size: 0.95rem;
-}
+/* ---------- the two-column frame ---------- */
 
-/* Short screens (most phones, small laptops): drop the pitch text, then the whole hero. */
-@media (max-height: 1000px) {
-  .page--setup .hero-sub,
-  .page--setup .hero .eyebrow {
-    display: none;
-  }
-}
-@media (max-height: 760px) {
-  .page--setup .hero {
-    display: none;
-  }
-  .page--setup .setup-note {
-    display: none;
-  }
-}
-
-/* ---------- the card ---------- */
-
-.page--setup .setup-card {
+.page--setup .setup-split {
   flex: 1 1 auto;
   min-height: 0;
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
   box-sizing: border-box;
-  width: min(460px, 100% - 24px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 460px);
+  grid-template-rows: minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(24px, 6vw, 80px);
+  padding: clamp(12px, 3dvh, 32px) clamp(16px, 4vw, 40px)
+    calc(clamp(12px, 3dvh, 32px) + env(safe-area-inset-bottom));
+}
+
+/* ---------- left: the pitch ---------- */
+
+.page--setup .setup-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: clamp(10px, 2.2dvh, 20px);
+  min-width: 0;
+  text-align: left;
+  animation: fade-up 0.45s ease both;
+}
+
+.page--setup .setup-hero h1 {
+  margin: 0;
+  font-size: clamp(1.8rem, min(4.6vw, 6.4dvh), 3.2rem);
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-align: left;
+  background: var(--hero-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.page--setup .setup-hero .hero-sub {
+  margin: 0;
+  max-width: 34ch;
+  font-size: clamp(0.95rem, 1.6dvh + 0.45rem, 1.15rem);
+  line-height: 1.5;
+  color: var(--t-muted);
+}
+
+/* Decorative voice bars. */
+.page--setup .wave {
+  display: flex;
+  align-items: flex-end;
+  gap: clamp(4px, 0.5vw, 7px);
+  height: clamp(48px, 13dvh, 110px);
+  margin-top: 0.25rem;
+}
+.page--setup .wave span {
+  flex: 0 0 clamp(5px, 0.6vw, 8px);
+  height: var(--h);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #c084fc, #7c3aed);
+  transform-origin: bottom;
+  animation: wave-pulse 1.6s ease-in-out infinite;
+  animation-delay: var(--d);
+}
+@keyframes wave-pulse {
+  0%,
+  100% {
+    transform: scaleY(0.55);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.page--setup .hero-chips {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+.page--setup .hero-chips li {
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--score-chip);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-line);
+}
+
+/* ---------- right: the card ---------- */
+
+.page--setup .setup-card {
+  width: 100%;
   max-width: none;
-  margin: 0 auto calc(12px + env(safe-area-inset-bottom));
+  min-height: 0;
+  max-height: 100%;
+  box-sizing: border-box;
+  margin: 0;
   padding: clamp(14px, 2.4dvh, 28px) clamp(14px, 4vw, 28px);
   gap: 0.7rem;
   overflow: hidden;
+  border-color: var(--accent-line);
+  box-shadow:
+    var(--shadow-card),
+    inset 0 1px 0 var(--accent),
+    0 0 60px -20px var(--accent-line);
 }
 .page--setup .setup-card > * {
   flex-shrink: 0;
@@ -71,11 +140,64 @@
   margin-top: 0;
 }
 
+/* ---------- smaller screens ---------- */
+
 @media (max-height: 800px) {
+  .page--setup .setup-note {
+    display: none;
+  }
   .page--setup .mode-toggle {
     padding: 10px 12px;
   }
   .page--setup .mode-toggle-sub {
     font-size: 12px;
+  }
+}
+
+/* Short but wide (small laptop): keep both columns, drop the extras. */
+@media (max-height: 620px) {
+  .page--setup .wave,
+  .page--setup .hero-chips {
+    display: none;
+  }
+}
+
+/* One column: phones and portrait tablets. */
+@media (max-width: 860px) {
+  .page--setup .setup-split {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    justify-items: center;
+    align-items: start;
+    gap: clamp(8px, 2dvh, 20px);
+    padding-top: clamp(8px, 2dvh, 20px);
+  }
+  .page--setup .setup-hero {
+    align-items: center;
+    text-align: center;
+  }
+  .page--setup .setup-hero h1 {
+    text-align: center;
+    font-size: clamp(1.4rem, 4dvh, 2.2rem);
+  }
+  /* Only the headline stays above the card. */
+  .page--setup .setup-hero .hero-sub,
+  .page--setup .wave,
+  .page--setup .hero-chips {
+    display: none;
+  }
+  .page--setup .setup-card {
+    max-width: 460px;
+    align-self: start;
+  }
+}
+
+/* Short and narrow (most phones): the card gets the whole screen. */
+@media (max-width: 860px) and (max-height: 760px) {
+  .page--setup .setup-hero {
+    display: none;
+  }
+  .page--setup .setup-split {
+    grid-template-rows: minmax(0, 1fr);
   }
 }
