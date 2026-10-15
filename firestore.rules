@@ -6,6 +6,13 @@ service cloud.firestore {
     // Keep the limits below in step with shared/limits.js ([rules] markers) and saveSession() in
     // src/lib/history.js. Rules can't import code, so role/seniority are only length-checked here:
     // the server enforces the real lists (presets, or a sanitized custom role of up to 60 chars).
+    //
+    // Data model per user:
+    //   sessions/{id}              summary (small): averages, answerCount, ...
+    //   sessions/{id}/details/qas  the answers, feedback and sample answers
+    //   stats/summary              rolling per-mode totals
+    // Sessions saved before the split hold `qas` inside the main document. They can still be read
+    // and deleted, but only the new shape can be written.
 
     function isScore(v) {
       return v is int && v >= 0 && v <= 100;
@@ -79,23 +86,65 @@ service cloud.firestore {
         && qaOk(qas, 10) && qaOk(qas, 11);
     }
 
+    // The summary document: everything except the answers.
     function validSession(d) {
-      return d.keys().hasOnly(['role', 'seniority', 'mode', 'overallSummary', 'averages', 'qas', 'createdAt'])
-        && d.keys().hasAll(['role', 'seniority', 'mode', 'overallSummary', 'averages', 'qas', 'createdAt'])
+      return d.keys().hasOnly(['role', 'seniority', 'mode', 'overallSummary', 'averages', 'answerCount', 'createdAt'])
+        && d.keys().hasAll(['role', 'seniority', 'mode', 'overallSummary', 'averages', 'answerCount', 'createdAt'])
         && d.role is string && d.role.size() >= 1 && d.role.size() <= 60
         && d.seniority is string && d.seniority.size() >= 1 && d.seniority.size() <= 20
         && d.mode in ['practice', 'full']
         && d.overallSummary is string && d.overallSummary.size() <= 1000
         && validAverages(d.averages)
-        && validQas(d.qas)
+        && d.answerCount is int && d.answerCount >= 1 && d.answerCount <= 12
         && d.createdAt == request.time; // must be serverTimestamp(), so it can't be forged
     }
 
-    // Each user can only touch their own sessions.
+    // The details document: only the answers.
+    function validDetails(d) {
+      return d.keys().hasOnly(['qas'])
+        && validQas(d.qas);
+    }
+
+    // One mode's running totals. The sums are sums of per-session averages (each 0-100), so they
+    // can never exceed 100 * count.
+    function validBucket(b) {
+      return b is map
+        && b.keys().hasOnly(['count', 'content', 'clarity', 'confidence', 'overall', 'best'])
+        && b.keys().hasAll(['count', 'content', 'clarity', 'confidence', 'overall', 'best'])
+        && b.count is int && b.count >= 0 && b.count <= 1000000
+        && b.content is int && b.content >= 0 && b.content <= 100 * b.count
+        && b.clarity is int && b.clarity >= 0 && b.clarity <= 100 * b.count
+        && b.confidence is int && b.confidence >= 0 && b.confidence <= 100 * b.count
+        && b.overall is int && b.overall >= 0 && b.overall <= 100 * b.count
+        && isScore(b.best);
+    }
+
+    function validStats(d) {
+      return d.keys().hasOnly(['full', 'practice', 'updatedAt'])
+        && d.keys().hasAll(['full', 'practice', 'updatedAt'])
+        && validBucket(d.full)
+        && validBucket(d.practice)
+        && d.updatedAt == request.time;
+    }
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // Each user can only touch their own data.
     match /users/{uid}/sessions/{sessionId} {
-      allow read, delete: if request.auth != null && request.auth.uid == uid;
-      allow create, update: if request.auth != null && request.auth.uid == uid
-        && validSession(request.resource.data);
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid) && validSession(request.resource.data);
+
+      match /details/{docId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && docId == 'qas' && validDetails(request.resource.data);
+      }
+    }
+
+    match /users/{uid}/stats/{docId} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid) && docId == 'summary' && validStats(request.resource.data);
     }
   }
 }

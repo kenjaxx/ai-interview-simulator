@@ -2,6 +2,7 @@ import { useMemo, useState } from "react"
 import { useHistory } from "../hooks/useHistory"
 import { useToast } from "../context/ToastContext"
 import { chronologicalSlice, summarizeSessions } from "../lib/trends"
+import { summarizeStats } from "../lib/stats"
 import HistoryItem from "./history/HistoryItem"
 import HistorySkeleton from "./history/HistorySkeleton"
 import TrendCards from "./TrendCards"
@@ -19,11 +20,14 @@ export default function HistoryScreen({ uid, onBack }) {
     status,
     sessions,
     hasMore,
+    stats,
+    details,
     loadingMore,
     loadMoreError,
     deleteError,
     loadFirstPage,
     loadMore,
+    loadDetails,
     remove,
   } = useHistory(uid)
   const toast = useToast()
@@ -44,14 +48,23 @@ export default function HistoryScreen({ uid, onBack }) {
     if (openId === id) setOpenId(null)
   }
 
+  // Opening a row fetches its answers (one document). Sessions saved before the split already have them.
+  const toggle = (s) => {
+    const opening = openId !== s.id
+    setOpenId(opening ? s.id : null)
+    const state = details[s.id]?.status
+    if (opening && !s.session && state !== "ready" && state !== "loading") loadDetails(s.id)
+  }
+
+  const detailFor = (s) => (s.session ? { status: "ready", session: s.session } : (details[s.id] ?? { status: "loading" }))
+
   // Every role that appears in the sessions loaded so far.
   const roles = useMemo(() => [...new Set(sessions.map((s) => s.role).filter(Boolean))].sort(), [sessions])
   // If the chosen role no longer exists (its last session was deleted), fall back to "all".
   const activeRole = roles.includes(roleFilter) ? roleFilter : "all"
 
-  // Filters and stats apply to the sessions loaded so far (a "+" shows when more exist).
-  // Memoized so expanding a row or confirming a delete doesn't rebuild the arrays, which would
-  // otherwise force the chart and trend cards to redraw on every click.
+  // The list, chart and trends use the sessions loaded so far. Memoized so expanding a row or
+  // confirming a delete doesn't rebuild the arrays, which would force the chart to redraw.
   const visible = useMemo(
     () =>
       sessions.filter(
@@ -60,7 +73,15 @@ export default function HistoryScreen({ uid, onBack }) {
     [sessions, filter, activeRole]
   )
   const chronological = useMemo(() => chronologicalSlice(visible), [visible])
-  const { average, best } = useMemo(() => summarizeSessions(visible), [visible])
+  const loadedSummary = useMemo(() => summarizeSessions(visible), [visible])
+
+  // The three stat cards are exact (from the rolling stats over ALL sessions) whenever they can be.
+  // Totals per role aren't stored, so with a role filter they cover the loaded sessions only.
+  const exact = !!stats && activeRole === "all"
+  const totals = useMemo(() => (exact ? summarizeStats(stats, filter) : null), [exact, stats, filter])
+  const countText = exact ? String(totals.count) : `${visible.length}${hasMore ? "+" : ""}`
+  const average = exact ? totals.average : loadedSummary.average
+  const best = exact ? totals.best : loadedSummary.best
 
   const clearFilters = () => {
     setFilter("all")
@@ -156,10 +177,7 @@ export default function HistoryScreen({ uid, onBack }) {
             <>
               <div className="score-row">
                 <div className="score-card">
-                  <span>
-                    {visible.length}
-                    {hasMore ? "+" : ""}
-                  </span>
+                  <span>{countText}</span>
                   <p className="score-label">Sessions</p>
                 </div>
                 <div className="score-card">
@@ -171,6 +189,14 @@ export default function HistoryScreen({ uid, onBack }) {
                   <p className="score-label">Best</p>
                 </div>
               </div>
+
+              {!exact && hasMore && (
+                <p className="trend-note" style={{ marginTop: "-1rem" }}>
+                  {activeRole !== "all"
+                    ? "These totals cover the sessions loaded so far for this role. Load more to include older ones."
+                    : "Totals are based on the sessions loaded so far."}
+                </p>
+              )}
 
               <TrendCards sessions={chronological} />
               <ProgressChart sessions={chronological} />
@@ -188,7 +214,9 @@ export default function HistoryScreen({ uid, onBack }) {
                     s={s}
                     open={openId === s.id}
                     confirming={confirmId === s.id}
-                    onToggle={() => setOpenId(openId === s.id ? null : s.id)}
+                    detail={detailFor(s)}
+                    onToggle={() => toggle(s)}
+                    onRetryDetails={() => loadDetails(s.id)}
                     onAskDelete={() => setConfirmId(s.id)}
                     onCancelDelete={() => setConfirmId(null)}
                     onDelete={() => handleDelete(s.id)}

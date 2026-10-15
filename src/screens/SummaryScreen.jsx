@@ -15,6 +15,7 @@ export default function SummaryScreen({ summary, onHistory }) {
     uid: summary.uid,
     saveStatus: summary.saveStatus,
     mode: summary.sessionMode,
+    session: summary.session,
   })
 
   return (

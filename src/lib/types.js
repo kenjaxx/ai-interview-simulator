@@ -45,6 +45,7 @@
  */
 
 /**
+ * A session as listed in History. Only the summary is loaded up front.
  * @typedef {Object} SavedSession
  * @property {string} id
  * @property {string} role
@@ -52,8 +53,28 @@
  * @property {"practice"|"full"} mode
  * @property {string} overallSummary
  * @property {{content:number, clarity:number, confidence:number, overall:number}} averages
- * @property {SessionEntry[]} session
+ * @property {number} answerCount
+ * @property {SessionEntry[]|null} session  null until the details are loaded (sessions saved
+ *                                          before the split already have it)
  * @property {Date|null} createdAt
+ */
+
+/**
+ * Running totals for one mode, stored in users/{uid}/stats/summary.
+ * content / clarity / confidence / overall are SUMS of the sessions' averages.
+ * @typedef {Object} StatsBucket
+ * @property {number} count
+ * @property {number} content
+ * @property {number} clarity
+ * @property {number} confidence
+ * @property {number} overall
+ * @property {number} best     highest overall score
+ */
+
+/**
+ * @typedef {Object} HistoryStats
+ * @property {StatsBucket} full
+ * @property {StatsBucket} practice
  */
 
 export {}

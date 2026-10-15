@@ -7,9 +7,23 @@ function formatDate(date) {
 }
 
 // One row in the history list: a header that expands to the full review, with export and delete.
-//   s           the saved session
-//   confirming  true while "Delete this session permanently?" is showing for this row
-export default function HistoryItem({ s, open, confirming, onToggle, onAskDelete, onCancelDelete, onDelete }) {
+//   s              the saved session (summary only; its answers come separately)
+//   detail         { status: "loading" | "ready" | "error", session } for the answers
+//   confirming     true while "Delete this session permanently?" is showing for this row
+//   onRetryDetails fetch the answers again after an error
+export default function HistoryItem({
+  s,
+  open,
+  confirming,
+  detail,
+  onToggle,
+  onRetryDetails,
+  onAskDelete,
+  onCancelDelete,
+  onDelete,
+}) {
+  const answers = s.answerCount ? ` · ${s.answerCount} ${s.answerCount === 1 ? "answer" : "answers"}` : ""
+
   return (
     <li className="history-item">
       <button className="history-item-head" onClick={onToggle} aria-expanded={open}>
@@ -17,6 +31,7 @@ export default function HistoryItem({ s, open, confirming, onToggle, onAskDelete
           <strong>{s.role}</strong>
           <span>
             {s.seniority} · {formatDate(s.createdAt)}
+            {answers}
           </span>
         </span>
         <span className={`mode-badge ${s.mode === "full" ? "mode-badge--full" : ""}`}>
@@ -30,13 +45,32 @@ export default function HistoryItem({ s, open, confirming, onToggle, onAskDelete
       {open && (
         <div className="history-item-body">
           {s.overallSummary && <p className="history-summary">{s.overallSummary}</p>}
-          <SessionReview session={s.session} />
+
+          {detail.status === "loading" && (
+            <p className="history-summary" role="status">
+              Loading answers…
+            </p>
+          )}
+
+          {detail.status === "error" && (
+            <div className="error-panel" role="alert" style={{ margin: "0 0 1rem" }}>
+              <p>Couldn't load the answers for this session.</p>
+              <button className="secondary-btn" onClick={onRetryDetails}>
+                Retry
+              </button>
+            </div>
+          )}
+
+          {detail.status === "ready" && <SessionReview session={detail.session} />}
+
           <div className="history-delete">
-            <ExportPdfButton
-              meta={{ role: s.role, seniority: s.seniority, mode: s.mode, date: s.createdAt }}
-              overallSummary={s.overallSummary}
-              session={s.session}
-            />
+            {detail.status === "ready" && (
+              <ExportPdfButton
+                meta={{ role: s.role, seniority: s.seniority, mode: s.mode, date: s.createdAt }}
+                overallSummary={s.overallSummary}
+                session={detail.session}
+              />
+            )}
             {confirming ? (
               <>
                 <span>Delete this session permanently?</span>
