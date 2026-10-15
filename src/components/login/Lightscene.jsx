@@ -14,6 +14,9 @@ import { useEffect, useRef } from "react"
 //   - The beam is a texture generated once (a soft cone), then rotated and scaled each frame.
 //   - Sizes are measured when something resizes, never inside the animation loop.
 //   - The card variables are only written every few frames, and only when they actually changed.
+//   - The animation loop is stopped while the tab is hidden, and while the user is typing in a text
+//     field (the light would only be redrawing behind their hands). It starts again when the tab
+//     is visible, or TYPING_RESUME_MS after the last keystroke.
 //
 // Render it as the first child of the positioned stage. It reads the stage from its own parent.
 //   cardRef  ref to the glass card element
@@ -22,6 +25,7 @@ const DUST_COUNT = 40
 const BEAM_FOLLOW = 0.1 // 0-1, lower = lazier, more cinematic lag
 const RENDER_SCALE = 0.5 // canvas resolution vs. screen. 0.5 = quarter of the pixels. Raise for sharper dust.
 const CARD_UPDATE_EVERY = 2 // write the card's CSS variables every Nth frame
+const TYPING_RESUME_MS = 1200 // how long after the last keystroke the animation starts again
 const DEFAULT_LIGHT = [232, 224, 255] // used if --lc can't be read from the stylesheet
 
 // Small seeded generator, so the stars are the same on every render (and render stays pure).
@@ -46,6 +50,12 @@ const STARS = (() => {
 })()
 
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
+
+// Keys that move focus or change a modifier, not text being typed.
+const NON_TYPING_KEYS = new Set(["Tab", "Shift", "Control", "Alt", "Meta", "Escape", "CapsLock"])
+
+const isTextField = (el) =>
+  el instanceof HTMLElement && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)
 
 // Reads the light colour ("r, g, b") from the --lc variable in Login.css.
 function readLight(stage) {
@@ -175,7 +185,7 @@ export default function LightScene({ cardRef }) {
     let cy = ty
     let pointerInside = false
 
-    let raf = 0
+    let raf = 0 // 0 = the loop is not running
     let drawQueued = false
     let frameCount = 0
     let lastGlow = ""
@@ -286,12 +296,31 @@ export default function LightScene({ cardRef }) {
       }
     }
 
+    // ---------- the loop, and when it is allowed to run ----------
+    // The loop only runs while the tab is visible and the user is not typing. With "reduce motion"
+    // on there is no loop at all: draw once, then only when the pointer moves.
+    let hidden = document.hidden
+    let typing = false
+    let typingTimer = null
+
     const loop = (now) => {
       draw(now)
       raf = requestAnimationFrame(loop)
     }
+    const startLoop = () => {
+      if (reduceMotion || raf || hidden || typing) return
+      raf = requestAnimationFrame(loop)
+    }
+    const stopLoop = () => {
+      cancelAnimationFrame(raf)
+      raf = 0
+    }
+    // Brings the loop in line with the current flags.
+    const syncLoop = () => {
+      if (hidden || typing) stopLoop()
+      else startLoop()
+    }
 
-    // With "reduce motion" on there is no loop: draw once, then only when the pointer moves.
     const requestDraw = () => {
       if (drawQueued) return
       drawQueued = true
@@ -317,9 +346,29 @@ export default function LightScene({ cardRef }) {
       if (reduceMotion) requestDraw()
     }
 
+    const onVisibility = () => {
+      hidden = document.hidden
+      syncLoop()
+    }
+
+    // Typing in a field pauses the light until a moment after the last keystroke.
+    const onKeyDown = (event) => {
+      if (reduceMotion || event.repeat === undefined) return
+      if (NON_TYPING_KEYS.has(event.key) || !isTextField(event.target)) return
+      typing = true
+      clearTimeout(typingTimer)
+      typingTimer = setTimeout(() => {
+        typing = false
+        syncLoop()
+      }, TYPING_RESUME_MS)
+      syncLoop()
+    }
+
     window.addEventListener("pointermove", onPointer, { passive: true })
     window.addEventListener("pointerdown", onPointer, { passive: true })
+    window.addEventListener("keydown", onKeyDown, { passive: true })
     window.addEventListener("blur", onLeave)
+    document.addEventListener("visibilitychange", onVisibility)
     document.documentElement.addEventListener("mouseleave", onLeave)
 
     // The card changes size when you switch between sign in / sign up / reset, and it slides in
@@ -336,14 +385,17 @@ export default function LightScene({ cardRef }) {
     card?.addEventListener("animationend", onResize)
 
     if (reduceMotion) requestDraw()
-    else raf = requestAnimationFrame(loop)
+    else startLoop()
 
     return () => {
-      cancelAnimationFrame(raf)
+      stopLoop()
+      clearTimeout(typingTimer)
       window.removeEventListener("pointermove", onPointer)
       window.removeEventListener("pointerdown", onPointer)
+      window.removeEventListener("keydown", onKeyDown)
       window.removeEventListener("blur", onLeave)
       window.removeEventListener("resize", onResize)
+      document.removeEventListener("visibilitychange", onVisibility)
       document.documentElement.removeEventListener("mouseleave", onLeave)
       card?.removeEventListener("animationend", onResize)
       observer?.disconnect()
