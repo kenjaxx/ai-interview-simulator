@@ -1,0 +1,207 @@
+.notice-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+  background: rgba(6, 6, 12, 0.6);
+  animation: notice-fade 0.18s ease both;
+}
+
+.notice {
+  width: 100%;
+  max-width: 400px;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 24px;
+  border-radius: 20px;
+  background: var(--input-bg);
+  border: 1px solid var(--line-strong);
+  box-shadow:
+    var(--shadow-card),
+    0 30px 80px -20px rgba(0, 0, 0, 0.6);
+  color: var(--t-main);
+  text-align: left;
+  animation: notice-pop 0.22s ease both;
+}
+
+.notice-handle {
+  display: none;
+  width: 36px;
+  height: 4px;
+  margin: -8px auto 14px;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+
+.notice-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 10px;
+}
+
+.notice-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--warn);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-line);
+}
+
+.notice-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--t-head);
+}
+
+.notice-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--t-muted);
+}
+
+/* ---------- the three automatic tries ---------- */
+
+.notice-steps {
+  list-style: none;
+  display: flex;
+  margin: 20px 0 8px;
+  padding: 0;
+}
+.notice-steps li {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  text-align: center;
+}
+/* The dashed line between two dots. */
+.notice-steps li + li::before {
+  content: "";
+  position: absolute;
+  top: 13px;
+  left: calc(-50% + 20px);
+  width: calc(100% - 40px);
+  border-top: 1.5px dashed var(--line-strong);
+}
+.notice-step-dot {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--accent);
+  background: var(--accent-bg-strong);
+  border: 1px solid var(--accent-line);
+}
+.notice-step-label {
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--t-chip);
+}
+
+.notice-foot {
+  margin: 12px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--t-muted);
+}
+
+.notice-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0 0;
+  font-size: 13px;
+  color: var(--t-chip);
+  cursor: pointer;
+}
+.notice-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.notice-check input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.notice-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+.notice-actions .primary-btn {
+  margin-top: 0;
+}
+
+@keyframes notice-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes notice-pop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes notice-sheet {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* ---------- phones: a bottom sheet ---------- */
+
+@media (max-width: 520px) {
+  .notice-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .notice {
+    max-width: none;
+    max-height: 90dvh;
+    padding: 20px 20px calc(20px + env(safe-area-inset-bottom));
+    border-radius: 20px 20px 0 0;
+    border-bottom: none;
+    animation: notice-sheet 0.25s ease both;
+  }
+  .notice-handle {
+    display: block;
+  }
+}

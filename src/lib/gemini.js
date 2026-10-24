@@ -1,184 +1,139 @@
-import {
-  GEMINI_API_KEY,
-  MODEL,
-  FALLBACK_MODEL,
-  geminiUrl,
-  GEMINI_PROFILES,
-  MIN_RETRY_WINDOW_MS,
-  SHORT_RETRY_SEC,
-} from "./settings.js"
-import { HttpError } from "./errors.js"
-import { sleep } from "./utils.js"
+import { messageForError } from "./errorMessages"
+import { callBackend } from "./backend"
+import { mockDelay, mockEvaluation, mockSummary } from "./mockEvaluation"
 
-function parseRetryDelaySeconds(errorBody) {
-  try {
-    const details = errorBody?.error?.details || []
-    const retryInfo = details.find((d) => d["@type"]?.includes("RetryInfo"))
-    const raw = retryInfo?.retryDelay
-    if (!raw) return null
-    const seconds = parseFloat(String(raw).replace("s", ""))
-    return Number.isFinite(seconds) ? Math.ceil(seconds) : null
-  } catch {
-    return null
+export { GeminiApiError } from "./apiError"
+
+// Set VITE_MOCK_AI=true in your .env to bypass the backend entirely during
+// UI/dev work: zero quota spent, instant fake responses.
+const MOCK_MODE = import.meta.env.VITE_MOCK_AI === "true"
+
+// Scores a set of Q&As in one call: a whole interview, or a single retried answer.
+// Practice Mode is scored locally; Full AI Mode goes through /api/evaluate,
+// which verifies the Firebase login (and App Check), enforces usage limits, and holds the Gemini key server-side.
+//
+// qas: [{ question, answer, inputMethod, metrics: { fillerCount, wpm, responseDelaySec } }, ...]
+//
+// Returns: { evaluations, overallSummary, usage }
+//   usage is { remaining, limit } for Full AI Mode, or null when scored locally.
+export async function evaluateSession({ role, seniority, qas, mock = false }) {
+  if (MOCK_MODE || mock) {
+    await mockDelay()
+    // The question is passed along so the local scorer can check the answer is on topic.
+    const evaluations = qas.map((qa) => mockEvaluation(qa.answer, qa.metrics, qa.inputMethod, qa.question))
+    return {
+      evaluations,
+      overallSummary: mockSummary(evaluations),
+      usage: null,
+    }
+  }
+
+  const body = await callBackend(
+    {
+      role,
+      seniority,
+      // inputMethod must be sent, otherwise the server assumes "voice" and judges
+      // typed answers against pace/delay metrics that don't exist for them.
+      qas: qas.map(({ question, answer, metrics, inputMethod, isFollowUp }) => ({
+        question,
+        answer,
+        metrics,
+        inputMethod: inputMethod === "text" ? "text" : "voice",
+        isFollowUp: !!isFollowUp,
+      })),
+    },
+    (b) => Array.isArray(b.evaluations)
+  )
+
+  return {
+    evaluations: body.evaluations.map((e) => ({
+      ...e,
+      star: e.star ?? null,
+      strongAnswer: e.strongAnswer ?? "",
+    })),
+    overallSummary: body.overallSummary || "",
+    usage: body.usage ?? null,
   }
 }
 
-// One attempt against one model. Throws an HttpError that says whether it's refundable and retryable.
-async function callGeminiOnce(model, systemPrompt, userPrompt, schema, temperature, maxOutputTokens, timeoutMs) {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-  const timedOut = () =>
-    new HttpError(504, "The AI took too long to respond. Please retry.", {}, { refund: "capped", retryable: true })
+// The reason the last quota check failed, in words a user can act on ("" when it succeeded).
+// The quota meter shows this under its Retry button.
+let lastUsageError = ""
+export function getUsageError() {
+  return lastUsageError
+}
 
+// Worth one more try: the request never arrived, or the server hiccuped.
+const isTransient = (err) => err && (err.status === 0 || err.status >= 500)
+
+const usageIsValid = (b) => typeof b?.usage?.remaining === "number" && typeof b?.usage?.limit === "number"
+
+async function loadUsage() {
   try {
-    let res
+    let body
     try {
-      res = await fetch(geminiUrl(model), {
-        method: "POST",
-        signal: controller.signal,
-        headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema: schema,
-            temperature,
-            maxOutputTokens,
-          },
-        }),
-      })
+      body = await callBackend({ action: "usage" }, usageIsValid)
     } catch (err) {
-      if (err.name === "AbortError") throw timedOut()
-      console.error(`Gemini network error (${model})`, err)
-      throw new HttpError(502, "Couldn't reach the AI service.", {}, { refund: "always", retryable: true })
+      if (!isTransient(err)) throw err
+      await new Promise((resolve) => setTimeout(resolve, 1200))
+      body = await callBackend({ action: "usage" }, usageIsValid)
     }
-
-    if (!res.ok) {
-      let errBody = null
-      try {
-        errBody = await res.json()
-      } catch {
-        /* not JSON */
-      }
-
-      if (res.status === 429) {
-        const isDailyQuota = !!errBody?.error?.details?.some((d) =>
-          d.violations?.some((v) => v.quotaId?.toLowerCase().includes("perday"))
-        )
-        const retryAfterSeconds = parseRetryDelaySeconds(errBody)
-        throw new HttpError(
-          429,
-          isDailyQuota
-            ? "The daily AI request limit has been reached."
-            : "Too many requests right now — the AI is rate-limiting.",
-          { isDailyQuota, retryAfterSeconds, limitScope: "provider" },
-          { refund: "always", retryable: true, retryDelaySec: retryAfterSeconds }
-        )
-      }
-
-      // Full details always go to the server logs, with the model and status on one line.
-      console.error(
-        `Gemini API error (${model}) status=${res.status} message=${errBody?.error?.message ?? "(none)"}`
-      )
-
-      // 5xx and a missing model are worth another try. Other 4xx (bad key, bad request) would fail
-      // the same way again, so they are not retried.
-      const retryable = res.status >= 500 || res.status === 404
-
-      // The status code is safe to show and makes failures diagnosable from the browser.
-      let message
-      if (res.status === 503) message = "The AI is very busy right now. Please try again in a minute. (503)"
-      else if (res.status === 400) message = "The AI rejected the request. (400)"
-      else if (res.status === 401 || res.status === 403) message = "The server's AI key was rejected. (" + res.status + ")"
-      else if (res.status === 404) message = "The configured AI model wasn't found. (404)"
-      else message = `The AI service returned an error. (${res.status})`
-
-      throw new HttpError(502, message, {}, { refund: "always", retryable })
-    }
-
-    let data
-    try {
-      data = await res.json()
-    } catch (err) {
-      if (controller.signal.aborted) throw timedOut()
-      console.error(`Gemini response body unreadable (${model})`, err.message)
-      throw new HttpError(502, "The AI returned an unreadable response.", {}, { refund: "capped" })
-    }
-
-    if (data?.promptFeedback?.blockReason) {
-      console.error("Gemini blocked the prompt:", data.promptFeedback.blockReason)
-      throw new HttpError(422, "The AI couldn't evaluate this content.")
-    }
-
-    const candidate = data?.candidates?.[0]
-    if (candidate?.finishReason === "MAX_TOKENS") {
-      console.error(`Gemini response was cut off (MAX_TOKENS, ${model})`)
-      throw new HttpError(502, "The AI's response was cut off. Please retry.", {}, { refund: "capped", retryable: true })
-    }
-
-    const text = (candidate?.content?.parts || [])
-      .filter((p) => !p.thought && typeof p.text === "string")
-      .map((p) => p.text)
-      .join("")
-    if (!text) throw new HttpError(502, "The AI returned an empty response.", {}, { refund: "capped", retryable: true })
-    return text
-  } finally {
-    clearTimeout(timer)
+    lastUsageError = ""
+    return body.usage
+  } catch (err) {
+    lastUsageError = messageForError(err)
+    throw err
   }
 }
 
-// Tries up to three attempts inside the profile's time budget:
-//   1. the primary model
-//   2. the fallback model (a different model has its own capacity), almost immediately
-//   3. the primary again after a short pause, in case the spike has passed
-// If both models are the same, it makes two attempts on that model with a pause between.
-export async function callGemini(
-  systemPrompt,
-  userPrompt,
-  schema,
-  temperature = 0.3,
-  profile = GEMINI_PROFILES.evaluate
-) {
-  const { maxOutputTokens, attemptTimeoutMs, totalBudgetMs } = profile
-  const deadline = Date.now() + totalBudgetMs
-  const sameModel = MODEL === FALLBACK_MODEL
-  const sequence = sameModel ? [MODEL, MODEL] : [MODEL, FALLBACK_MODEL, MODEL]
+// Usage lookups currently in flight, keyed by uid. Callers that ask while a lookup is already
+// running (a double effect in StrictMode, a fast screen change, a Retry click) share its result.
+const usageInflight = new Map()
 
-  let lastError = null
+// How many AI evaluations are left today. Spends nothing. Retries once on a transient failure.
+// Returns { remaining, limit, globalExhausted }, or null in mock mode.
+// How often to call this is decided by the caller (see useQuota), which caches the result.
+export function fetchUsage(uid = "") {
+  if (MOCK_MODE) return Promise.resolve(null)
 
-  for (let i = 0; i < sequence.length; i++) {
-    const model = sequence[i]
-    const remaining = deadline - Date.now()
-    if (i > 0 && remaining < MIN_RETRY_WINDOW_MS) break
+  const existing = usageInflight.get(uid)
+  if (existing) return existing
 
-    try {
-      return await callGeminiOnce(
-        model,
-        systemPrompt,
-        userPrompt,
-        schema,
-        temperature,
-        maxOutputTokens,
-        Math.min(attemptTimeoutMs, remaining)
-      )
-    } catch (err) {
-      if (!(err instanceof HttpError) || !err.retryable) throw err
-      lastError = err
+  const request = loadUsage().finally(() => {
+    if (usageInflight.get(uid) === request) usageInflight.delete(uid)
+  })
+  usageInflight.set(uid, request)
+  return request
+}
 
-      const next = sequence[i + 1]
-      if (!next) break
-
-      // A 429 that asks for a long wait on the same model isn't worth waiting for.
-      if (next === model && err.status === 429 && err.retryDelaySec > SHORT_RETRY_SEC) throw err
-
-      const waitMs = next !== model ? 300 : Math.max(2, err.retryDelaySec ?? 2) * 1000
-      if (deadline - Date.now() - waitMs < MIN_RETRY_WINDOW_MS) break
-
-      console.warn(`Gemini ${model} failed (${err.status}); trying ${next} in ${waitMs}ms`)
-      await sleep(waitMs)
+export async function generateQuestions({ role, seniority, jobDescription = "", count, type = "mixed" }) {
+  if (MOCK_MODE) {
+    await mockDelay()
+    return {
+      questions: Array.from(
+        { length: count },
+        (_, i) => `(Mock) Tailored question ${i + 1} for a ${seniority} ${role}.`
+      ),
+      usage: null,
     }
   }
+  const body = await callBackend(
+    { action: "questions", role, seniority, jobDescription, count, type },
+    (b) => Array.isArray(b.questions)
+  )
+  return { questions: body.questions, usage: body.usage ?? null }
+}
 
-  throw lastError
+// Asks Gemini for ONE probing follow-up to a single answer. Costs one AI evaluation.
+// Returns { question: string, usage }.
+export async function generateFollowUp({ role, seniority, question, answer }) {
+  if (MOCK_MODE) {
+    await mockDelay()
+    return { question: "(Mock) Can you walk me through a concrete example of that?", usage: null }
+  }
+  const body = await callBackend(
+    { action: "followup", role, seniority, question, answer },
+    (b) => typeof b?.question === "string" && b.question.trim().length > 0
+  )
+  return { question: body.question, usage: body.usage ?? null }
 }

@@ -27,8 +27,6 @@ function parseRetryDelaySeconds(errorBody) {
 async function callGeminiOnce(model, systemPrompt, userPrompt, schema, temperature, maxOutputTokens, timeoutMs) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
-  // A timeout is worth one more try (on the fallback model, if there is time left): a slow model is
-  // often a busy model. It is still only refunded up to the daily cap, since we can't tell whose fault it was.
   const timedOut = () =>
     new HttpError(504, "The AI took too long to respond. Please retry.", {}, { refund: "capped", retryable: true })
 
@@ -79,12 +77,24 @@ async function callGeminiOnce(model, systemPrompt, userPrompt, schema, temperatu
         )
       }
 
-      // Full details go to server logs only, never to the client.
-      console.error(`Gemini API error (${model})`, res.status, JSON.stringify(errBody))
-      // 5xx and a missing model are worth one more try (the fallback model may be healthy).
-      // Other 4xx (bad key, bad request) would fail the same way again.
+      // Full details always go to the server logs, with the model and status on one line.
+      console.error(
+        `Gemini API error (${model}) status=${res.status} message=${errBody?.error?.message ?? "(none)"}`
+      )
+
+      // 5xx and a missing model are worth another try. Other 4xx (bad key, bad request) would fail
+      // the same way again, so they are not retried.
       const retryable = res.status >= 500 || res.status === 404
-      throw new HttpError(502, "The AI service returned an error.", {}, { refund: "always", retryable })
+
+      // The status code is safe to show and makes failures diagnosable from the browser.
+      let message
+      if (res.status === 503) message = "The AI is very busy right now. Please try again in a minute. (503)"
+      else if (res.status === 400) message = "The AI rejected the request. (400)"
+      else if (res.status === 401 || res.status === 403) message = `The server's AI key was rejected. (${res.status})`
+      else if (res.status === 404) message = "The configured AI model wasn't found. (404)"
+      else message = `The AI service returned an error. (${res.status})`
+
+      throw new HttpError(502, message, {}, { refund: "always", retryable })
     }
 
     let data
@@ -97,7 +107,6 @@ async function callGeminiOnce(model, systemPrompt, userPrompt, schema, temperatu
     }
 
     if (data?.promptFeedback?.blockReason) {
-      // Caused by the user's content, so no refund.
       console.error("Gemini blocked the prompt:", data.promptFeedback.blockReason)
       throw new HttpError(422, "The AI couldn't evaluate this content.")
     }
@@ -105,24 +114,25 @@ async function callGeminiOnce(model, systemPrompt, userPrompt, schema, temperatu
     const candidate = data?.candidates?.[0]
     if (candidate?.finishReason === "MAX_TOKENS") {
       console.error(`Gemini response was cut off (MAX_TOKENS, ${model})`)
-      throw new HttpError(502, "The AI's response was cut off. Please retry.", {}, { refund: "capped" })
+      throw new HttpError(502, "The AI's response was cut off. Please retry.", {}, { refund: "capped", retryable: true })
     }
 
-    // Skip any "thought" parts and join the rest, so this works whether or not the model returns thoughts.
     const text = (candidate?.content?.parts || [])
       .filter((p) => !p.thought && typeof p.text === "string")
       .map((p) => p.text)
       .join("")
-    if (!text) throw new HttpError(502, "The AI returned an empty response.", {}, { refund: "capped" })
+    if (!text) throw new HttpError(502, "The AI returned an empty response.", {}, { refund: "capped", retryable: true })
     return text
   } finally {
     clearTimeout(timer)
   }
 }
 
-// Tries the primary model; on a transient failure (including a timeout) waits briefly and tries ONE
-// more time (on the fallback model if it's different), all inside the profile's time budget.
-// profile: one of GEMINI_PROFILES (token limit, per-attempt timeout, total budget).
+// Tries up to three attempts inside the profile's time budget:
+//   1. the primary model
+//   2. the fallback model (a different model has its own capacity), almost immediately
+//   3. the primary again after a short pause, in case the spike has passed
+// If both models are the same, it makes two attempts on that model with a pause between.
 export async function callGemini(
   systemPrompt,
   userPrompt,
@@ -132,40 +142,43 @@ export async function callGemini(
 ) {
   const { maxOutputTokens, attemptTimeoutMs, totalBudgetMs } = profile
   const deadline = Date.now() + totalBudgetMs
-  const models = [MODEL, FALLBACK_MODEL]
   const sameModel = MODEL === FALLBACK_MODEL
+  const sequence = sameModel ? [MODEL, MODEL] : [MODEL, FALLBACK_MODEL, MODEL]
 
-  try {
-    return await callGeminiOnce(
-      models[0],
-      systemPrompt,
-      userPrompt,
-      schema,
-      temperature,
-      maxOutputTokens,
-      attemptTimeoutMs
-    )
-  } catch (err) {
-    if (!(err instanceof HttpError) || !err.retryable) throw err
+  let lastError = null
 
-    // Same model: honor the server's retry hint, but not if it asks for a long wait.
-    // Different model: it has its own quota and capacity, so go almost immediately.
-    if (sameModel && err.status === 429 && err.retryDelaySec > SHORT_RETRY_SEC) throw err
-    const waitMs = sameModel ? Math.max(1, err.retryDelaySec ?? 1) * 1000 : 300
+  for (let i = 0; i < sequence.length; i++) {
+    const model = sequence[i]
+    const remaining = deadline - Date.now()
+    if (i > 0 && remaining < MIN_RETRY_WINDOW_MS) break
 
-    const remaining = deadline - Date.now() - waitMs
-    if (remaining < MIN_RETRY_WINDOW_MS) throw err // not enough time left for a real second attempt
+    try {
+      return await callGeminiOnce(
+        model,
+        systemPrompt,
+        userPrompt,
+        schema,
+        temperature,
+        maxOutputTokens,
+        Math.min(attemptTimeoutMs, remaining)
+      )
+    } catch (err) {
+      if (!(err instanceof HttpError) || !err.retryable) throw err
+      lastError = err
 
-    console.warn(`Gemini ${models[0]} failed (${err.status}); retrying with ${models[1]} in ${waitMs}ms`)
-    await sleep(waitMs)
-    return await callGeminiOnce(
-      models[1],
-      systemPrompt,
-      userPrompt,
-      schema,
-      temperature,
-      maxOutputTokens,
-      Math.min(attemptTimeoutMs, remaining)
-    )
+      const next = sequence[i + 1]
+      if (!next) break
+
+      // A 429 that asks for a long wait on the same model isn't worth waiting for.
+      if (next === model && err.status === 429 && err.retryDelaySec > SHORT_RETRY_SEC) throw err
+
+      const waitMs = next !== model ? 300 : Math.max(2, err.retryDelaySec ?? 2) * 1000
+      if (deadline - Date.now() - waitMs < MIN_RETRY_WINDOW_MS) break
+
+      console.warn(`Gemini ${model} failed (${err.status}); trying ${next} in ${waitMs}ms`)
+      await sleep(waitMs)
+    }
   }
+
+  throw lastError
 }

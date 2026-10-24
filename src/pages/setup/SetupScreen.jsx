@@ -5,6 +5,8 @@ import RoleStep from "./components/RoleStep"
 import ModeStep from "./components/ModeStep"
 import StartStep from "./components/StartStep"
 import ResumeCard from "./components/ResumeCard"
+import FullAiNotice from "./components/FullAiNotice"
+import { usePreference } from "../../common/hooks/usePreference"
 import "./setup.css"
 import "./setup.fit.css"
 
@@ -15,6 +17,11 @@ const LAST_STEP = STEP_TITLES.length - 1
 const BARS = [30, 55, 80, 45, 95, 60, 35, 75, 50, 25, 65, 40]
 const CHIPS = ["STAR checks", "Voice", "Follow-ups"]
 
+const isBool = (v) => typeof v === "boolean"
+
+// The free-tier warning shows at most once per page load, even if the user returns to this screen.
+let noticeShownThisSession = false
+
 // setup: the `setup` object from useInterview().
 // Two sections on wide screens: the pitch on the left, the three-step form on the right.
 // On narrow screens the pitch shrinks to a headline above the form (or disappears on short screens).
@@ -24,12 +31,55 @@ export default function SetupScreen({ setup, onHistory }) {
   const headingRef = useRef(null)
   const movedByUser = useRef(false)
 
+  // The free-tier warning. aiNotice is null (closed), "toggle" (Full AI Mode was just switched on)
+  // or "start" (the user pressed Start while Full AI Mode is on).
+  const [hideNotice, setHideNotice] = usePreference("interview-ai-hide-full-notice", false, isBool)
+  const [aiNotice, setAiNotice] = useState(null)
+
+  const needsNotice = !hideNotice && !noticeShownThisSession
+
   const go = (next) => {
     if (setup.starting || next < 0 || next > LAST_STEP) return
     if (next > 0 && !setup.roleReady) return // a custom role needs a name before moving on
     movedByUser.current = true
     setStep(next)
     setReached((r) => Math.max(r, next))
+  }
+
+  // Switching Full AI Mode ON asks first. Switching it off never does.
+  const handleAiMode = (next) => {
+    if (next === "full" && needsNotice) {
+      setAiNotice("toggle")
+      return
+    }
+    setup.setAiMode(next)
+  }
+
+  // Covers a custom role (always Full AI) and a Full AI choice remembered from last time.
+  const handleStart = () => {
+    if (setup.aiMode === "full" && needsNotice) {
+      setAiNotice("start")
+      return
+    }
+    setup.start()
+  }
+
+  const closeNotice = () => setAiNotice(null)
+
+  const acceptNotice = (dontShowAgain) => {
+    const kind = aiNotice
+    if (dontShowAgain) setHideNotice(true)
+    noticeShownThisSession = true
+    setAiNotice(null)
+    if (kind === "toggle") setup.setAiMode("full")
+    else setup.start()
+  }
+
+  // The quiet button: back out without turning anything on.
+  const declineNotice = () => {
+    // A preset role can fall back to Practice Mode. A custom role can't, so it just closes.
+    if (aiNotice === "start" && !setup.requiresFullAi) setup.setAiMode("practice")
+    setAiNotice(null)
   }
 
   // After the user moves between steps, put focus on the new step's heading so screen readers
@@ -39,6 +89,12 @@ export default function SetupScreen({ setup, onHistory }) {
     movedByUser.current = false
     headingRef.current?.focus()
   }, [step])
+
+  // ModeStep reads setup.setAiMode, so it gets a copy whose setter asks for confirmation first.
+  const modeStepSetup = { ...setup, setAiMode: handleAiMode }
+
+  let secondaryLabel = "Stay in Practice Mode"
+  if (aiNotice === "start") secondaryLabel = setup.requiresFullAi ? "Go back" : "Use Practice Mode"
 
   return (
     <div className="page page--setup">
@@ -88,13 +144,18 @@ export default function SetupScreen({ setup, onHistory }) {
 
           <div className="step-body">
             {step === 0 && <RoleStep setup={setup} />}
-            {step === 1 && <ModeStep setup={setup} />}
+            {step === 1 && <ModeStep setup={modeStepSetup} />}
             {step === 2 && <StartStep setup={setup} />}
           </div>
 
           <div className="step-nav">
             {step > 0 && (
-              <button type="button" className="secondary-btn" onClick={() => go(step - 1)} disabled={setup.starting}>
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={() => go(step - 1)}
+                disabled={setup.starting}
+              >
                 Back
               </button>
             )}
@@ -108,20 +169,14 @@ export default function SetupScreen({ setup, onHistory }) {
                 Next
               </button>
             ) : (
-             
-<button
-  type="button"
-  className="primary-btn"
-  onClick={setup.start}
-  disabled={
-    setup.starting ||
-    !setup.roleReady ||
-    setup.customRoleBlocked
-  }
->
-  {setup.starting ? "Preparing your questions…" : "Start interview"}
-</button>
-
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={handleStart}
+                disabled={setup.starting || !setup.roleReady || setup.customRoleBlocked}
+              >
+                {setup.starting ? "Preparing your questions…" : "Start interview"}
+              </button>
             )}
           </div>
 
@@ -134,6 +189,16 @@ export default function SetupScreen({ setup, onHistory }) {
           )}
         </div>
       </main>
+
+      {aiNotice && (
+        <FullAiNotice
+          continueLabel={aiNotice === "start" ? "Start interview" : "Turn on Full AI"}
+          secondaryLabel={secondaryLabel}
+          onContinue={acceptNotice}
+          onSecondary={declineNotice}
+          onClose={closeNotice}
+        />
+      )}
     </div>
   )
 }
