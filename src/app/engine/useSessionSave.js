@@ -46,5 +46,31 @@ export function useSessionSave({ uid, interviewIdRef }) {
 
   const retrySave = useCallback(() => runSave(interviewIdRef.current), [runSave, interviewIdRef])
 
-  return { saveStatus, queueSave, markSkipped, resetSave, retrySave }
+  // The id of the session being saved (null for a private session), so it can be stored and reused.
+  const getSessionId = useCallback(() => pendingSaveRef.current?.sessionId ?? null, [])
+
+  // Puts the save state back after a page reload.
+  //   saved / skipped  nothing more to do
+  //   anything else    the save may not have landed, so try it again. The id is the same as before,
+  //                    and saveSession() writes nothing if the session already exists, so it can't
+  //                    be saved twice or counted twice in the stats.
+  const restoreSave = useCallback(
+    ({ status, sessionId, data }) => {
+      if (status === "saved" || status === "skipped") {
+        pendingSaveRef.current = sessionId && data ? { sessionId, data } : null
+        setSaveStatus(status)
+        return
+      }
+      if (sessionId && data && uid) {
+        pendingSaveRef.current = { sessionId, data }
+        runSave(interviewIdRef.current)
+        return
+      }
+      pendingSaveRef.current = null
+      setSaveStatus("idle")
+    },
+    [uid, runSave, interviewIdRef]
+  )
+
+  return { saveStatus, queueSave, markSkipped, resetSave, retrySave, getSessionId, restoreSave }
 }

@@ -1,5 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from "react"
-
+import { useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo } from "react"
 
 import { findWeakestIndex } from "../../lib/scores"
 import { DEFAULT_QUESTION_COUNT } from "../../lib/interviewConfig"
@@ -17,6 +16,7 @@ import { createInterviewControls } from "./interviewControls"
 import { buildInterviewApi } from "./buildInterviewApi"
 import { useUnloadGuard } from "./useUnloadGuard"
 import { saveDraft, loadDraft, clearDraft } from "../../lib/draft"
+import { saveSummary, loadSummary, clearSummary } from "../../lib/summaryStore"
 import { ROLES, CUSTOM_ROLE } from "../../lib/options"
 // Runs an interview: the question loop. Everything else is delegated:
 //   useSetupForm        what the user picked on the setup screen
@@ -29,6 +29,9 @@ import { ROLES, CUSTOM_ROLE } from "../../lib/options"
 //   startInterview.js   building the question list and starting
 //   interviewControls.js  the buttons on the interview screen
 //   buildInterviewApi.js  shaping what App and the screens receive
+//
+// A finished session is also kept in sessionStorage (see lib/summaryStore.js), so reloading the
+// summary screen brings it back.
 //
 // Returns { screen, setScreen, setup, interview, summary }.
 export function useInterview({ user, authLoading }) {
@@ -82,30 +85,35 @@ export function useInterview({ user, authLoading }) {
   // through this ref, which breaks the presentQuestion <-> handleAnswer dependency cycle without
   // stale closures.
   const answerRouterRef = useRef(() => {})
+  // The user id the summary restore has already been tried for, so it runs once per sign-in.
+  const restoredForRef = useRef(null)
 
   // ---------- the focused hooks ----------
 
   const form = useSetupForm()
-const requiresFullAi = form.role === CUSTOM_ROLE
-const {
-  quota,
-  quotaRef,
-  quotaStatus,
-  quotaExhausted,
-  effectiveMode,
-  customRoleBlocked,
-  jdAvailable,
-  followUpsAvailable,
-  applyUsage,
-  refreshQuota,
-  resetQuota,
-} = useQuota({ uid, screen, aiMode: form.aiMode, requireFull: requiresFullAi })
+  const requiresFullAi = form.role === CUSTOM_ROLE
+  const {
+    quota,
+    quotaRef,
+    quotaStatus,
+    quotaExhausted,
+    effectiveMode,
+    customRoleBlocked,
+    jdAvailable,
+    followUpsAvailable,
+    applyUsage,
+    refreshQuota,
+    resetQuota,
+  } = useQuota({ uid, screen, aiMode: form.aiMode, requireFull: requiresFullAi })
 
   // The chosen interviewer decides which voice reads the questions.
   const speech = useSpeechIO({ interviewerId: form.interviewer })
   const { startListening, stopListening, speak, stopSpeaking, isSpeaking, acquireMic, releaseMic } = speech
 
-  const { saveStatus, queueSave, markSkipped, resetSave, retrySave } = useSessionSave({ uid, interviewIdRef })
+  const { saveStatus, queueSave, markSkipped, resetSave, retrySave, getSessionId, restoreSave } = useSessionSave({
+    uid,
+    interviewIdRef,
+  })
 
   const {
     isFollowUp,
@@ -213,6 +221,7 @@ const {
     retryResults,
     isRetryActive,
     resetRetry,
+    restoreRetryResults,
     runRetryScoring,
     handleRetryAnswer,
     startRetry,
@@ -243,6 +252,7 @@ const {
   // Tears everything down: speech, recognition, mic stream, and any in-flight scoring.
   const restart = useCallback(() => {
     clearDraft()
+    clearSummary()
     interviewIdRef.current++
     stopSpeaking()
     stopListening()
@@ -391,6 +401,7 @@ const {
 
   // Applies a freshly built question list: resets all per-interview state and asks question one.
   const beginSession = ({ config, questions, note, mode, inputMode: chosenInput }) => {
+    clearSummary() // a new interview replaces any finished one kept for reloads
     sessionConfigRef.current = config
     inputModeRef.current = chosenInput
     qasRef.current = []
@@ -420,7 +431,7 @@ const {
     presentQuestion(questions[0])
   }
 
-  const startInterview = createStartInterview({  
+  const startInterview = createStartInterview({
     form,
     effectiveMode,
     jdAvailable,
@@ -442,6 +453,7 @@ const {
     const draft = savedDraft
     if (!draft || starting) return
 
+    clearSummary()
     interviewIdRef.current++ // anything still in flight from before is now stale
     const chosenInput = draft.inputMode === "voice" && speech.voiceOk ? "voice" : "text"
 
@@ -492,6 +504,59 @@ const {
     }
   }, [user, authLoading, restart, resetQuota])
 
+  // After a page reload on the summary screen: put the finished session back. A layout effect runs
+  // before the browser paints, so the setup screen never flashes in between. It runs once per
+  // sign-in, and only when the app is still on its starting screen.
+  useLayoutEffect(() => {
+    if (!uid || restoredForRef.current === uid) return
+    restoredForRef.current = uid
+    if (screen !== "setup") return
+
+    const saved = loadSummary(uid)
+    if (!saved) return
+
+    interviewIdRef.current++ // anything still in flight from before is now stale
+
+    // What the retry flow reads later (startRetry uses the config and the answers).
+    sessionConfigRef.current = {
+      role: saved.meta.role,
+      seniority: saved.meta.seniority,
+      mode: saved.meta.mode,
+      save: saved.saveStatus !== "skipped",
+      followUps: false,
+    }
+    qasRef.current = saved.session.map(({ question, answer, metrics, inputMethod, isFollowUp: followUp }) => ({
+      question,
+      answer,
+      metrics,
+      inputMethod,
+      isFollowUp: followUp,
+    }))
+
+    setSessionMode(saved.sessionMode)
+    setSession(saved.session)
+    setSessionMeta(saved.meta)
+    setOverallSummary(saved.overallSummary)
+    setUsage(saved.usage)
+    setAnsweredCount(saved.session.length)
+    restoreRetryResults(saved.retryResults)
+
+    // If the session was never saved to Firestore, this tries again with the same id.
+    restoreSave({
+      status: saved.saveStatus,
+      sessionId: saved.saveSessionId,
+      data: {
+        role: saved.meta.role,
+        seniority: saved.meta.seniority,
+        mode: saved.meta.mode,
+        overallSummary: saved.overallSummary,
+        session: saved.session,
+      },
+    })
+
+    setScreen("summary")
+  }, [uid, screen, restoreRetryResults, restoreSave])
+
   // The weakest answer that hasn't been retried yet (-1 when there's nothing left to retry).
   const weakestIndex = useMemo(
     () => findWeakestIndex(session, new Set(Object.keys(retryResults).map(Number))),
@@ -534,6 +599,42 @@ const {
     sessionNote,
     awaitingFinalScore,
     getFollowUpsUsed,
+  ])
+
+  // Keep the finished session in step with the summary: scores, retry results and the save state
+  // (so a reload knows whether it still has to be saved). It is also kept while History is open,
+  // because History is reached from the summary. During a retry the last stored copy stays as is.
+  useEffect(() => {
+    if (!uid || session.length === 0 || !sessionMeta) return
+    if (screen !== "summary" && screen !== "history") return
+
+    saveSummary({
+      uid,
+      session,
+      meta: {
+        role: sessionMeta.role,
+        seniority: sessionMeta.seniority,
+        mode: sessionMeta.mode,
+        date: sessionMeta.date instanceof Date ? sessionMeta.date.toISOString() : null,
+      },
+      overallSummary,
+      usage,
+      sessionMode,
+      saveStatus,
+      saveSessionId: getSessionId(),
+      retryResults,
+    })
+  }, [
+    uid,
+    screen,
+    session,
+    sessionMeta,
+    overallSummary,
+    usage,
+    sessionMode,
+    saveStatus,
+    retryResults,
+    getSessionId,
   ])
 
   // Warn before the tab closes or reloads: during an interview, and on the summary while the

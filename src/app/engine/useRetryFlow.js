@@ -46,6 +46,15 @@ export function useRetryFlow({
     setRetryResults({})
   }, [])
 
+  // Puts earlier retry results back after a page reload. No retry is in progress afterwards.
+  const restoreRetryResults = useCallback((results) => {
+    retryRunRef.current++
+    retryIndexRef.current = null
+    retryAttemptRef.current = null
+    setRetryIndex(null)
+    setRetryResults(results || {})
+  }, [])
+
   const runRetryScoring = useCallback(
     async (forceMode) => {
       const index = retryIndexRef.current
@@ -165,6 +174,7 @@ export function useRetryFlow({
     retryResults,
     isRetryActive,
     resetRetry,
+    restoreRetryResults,
     runRetryScoring,
     handleRetryAnswer,
     startRetry,
