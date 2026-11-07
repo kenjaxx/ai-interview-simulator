@@ -1,88 +1,120 @@
-/* Login page: one screen on desktop. Shorter screens drop the extras. On tablets and phones the art
-   panel becomes a short banner under the form, and the page scrolls inside the stage. */
+/* Viewport fit rules. Desktop login is a single-screen composition with no page/card scrolling. */
 
-main.login-stage {
-  height: 100vh; /* fallback */
-  height: 100dvh;
-  padding: 1rem;
-  padding-bottom: calc(1rem + env(safe-area-inset-bottom));
-  overflow-y: auto;
-  scrollbar-width: thin;
+html:has(main.login-stage),
+body:has(main.login-stage),
+#root:has(main.login-stage) {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
-/* Medium-short screens: drop the least important pieces. */
-@media (max-height: 780px) {
+html:has(main.login-stage) {
+  height: 100%;
+}
+
+body:has(main.login-stage) {
+  margin: 0;
+}
+
+#root:has(main.login-stage) {
+  display: flex;
+}
+
+main.login-stage {
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+main.login-stage .login-shell {
+  min-height: 0;
+}
+
+main.login-stage .login-art,
+main.login-stage .login-side,
+main.login-stage .login-card {
+  min-height: 0;
+}
+
+main.login-stage .login-card {
+  overflow: hidden;
+}
+
+/* Compact layouts for shorter desktop/laptop viewports. */
+
+@media (max-height: 680px) and (min-width: 761px) {
+  main.login-stage .login-art {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+
+  main.login-stage .login-art-topline {
+    font-size: 8px;
+  }
+
+  main.login-stage .login-visual-stage {
+    grid-template-rows: minmax(125px, 1fr) auto;
+  }
+
+  main.login-stage .login-orb-stage {
+    min-height: 130px;
+  }
+
+  main.login-stage .login-demo-cards {
+    gap: 8px;
+  }
+
+  main.login-stage .login-vt,
+  main.login-stage .login-qcard {
+    min-height: 68px;
+  }
+
+  main.login-stage .login-card {
+    padding-top: 14px;
+    padding-bottom: 14px;
+    gap: 7px;
+  }
+
   main.login-stage .login-logo {
     display: none;
   }
-  main.login-stage .login-steps {
-    display: none;
-  }
-  main.login-stage .login-card {
-    padding: 22px 36px;
-  }
-}
 
-/* Short screens (small laptops): tighten more. */
-@media (max-height: 640px) {
-  main.login-stage .login-qcard {
+  main.login-stage .login-form-eyebrow {
     display: none;
   }
-  main.login-stage .login-art {
-    padding: 22px 26px;
-  }
+
   main.login-stage .login-strip {
-    height: 60px;
+    min-height: 54px;
+    flex-basis: 54px;
   }
 }
 
-/* Very short screens: only the orb stays. */
-@media (max-height: 560px) {
-  main.login-stage .login-vt {
-    display: none;
-  }
-}
+/* Phones/tablets: simplify the decorative artwork. */
 
-/* Tablet and phone: stack. The form comes first, the art banner after it. */
-@media (max-width: 860px) {
+@media (max-width: 760px) {
+  html:has(main.login-stage),
+  body:has(main.login-stage),
+  #root:has(main.login-stage) {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  main.login-stage {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
   main.login-stage .login-shell {
-    height: auto;
-    flex-direction: column-reverse;
-    max-width: 480px;
-    border-radius: 24px;
+    height: calc(100dvh - 16px);
+    min-height: 0;
   }
-  main.login-stage .login-side {
-    width: 100%;
-  }
-  main.login-stage .login-card {
-    overflow: visible;
-    padding: 24px 20px;
-  }
-  main.login-stage .login-card::before,
-  main.login-stage .login-card::after {
-    display: none;
-  }
-  main.login-stage .login-art {
-    padding: 22px;
-  }
-  main.login-stage .login-art-title {
-    font-size: 40px;
-    font-size: 11cqi;
-  }
-  main.login-stage .login-orb-zone,
-  main.login-stage .login-qcard,
-  main.login-stage .login-art-copy {
-    display: none;
-  }
-  main.login-stage .login-theme {
-    top: 10px;
-    right: 10px;
-  }
-}
 
-/* 16px stops iOS from zooming in when a field is focused. */
-@media (max-width: 520px) {
-  main.login-stage .login-input {
-    font-size: 16px;
+  main.login-stage .login-card {
+    overflow: hidden;
   }
 }
